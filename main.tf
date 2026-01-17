@@ -16,9 +16,10 @@ resource "hcloud_firewall" "mm" {
   rule {
     direction  = "in"
     protocol   = "tcp"
-    port       = "22"
+    port       = var.ssh_port
     source_ips = ["0.0.0.0/0", "::/0"]
   }
+
 
   # HTTPS restricted to Cloudflare IPs if enabled
   dynamic "rule" {
@@ -103,6 +104,7 @@ data "template_file" "cloud_init" {
     storage_box_user     = var.storage_box_user
     storage_box_password = var.storage_box_password
     watchtower_api_token = var.watchtower_api_token
+    ssh_port             = var.ssh_port
 
     # Fix PEM formatting and indent 6 spaces for YAML
     origin_cert = indent(6, replace(trimspace(cloudflare_origin_ca_certificate.origin[0].certificate), "\\n", "\n"))

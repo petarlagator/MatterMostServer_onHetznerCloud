@@ -11,6 +11,11 @@ packages:
   - fail2ban
 
 write_files:
+  - path: /etc/ssh/sshd_config.d/custom_port.conf
+    permissions: '0644'
+    content: |
+      Port ${ssh_port}
+
   - path: /root/install_docker.sh
     permissions: '0755'
     content: |
@@ -191,7 +196,7 @@ runcmd:
   - mkdir -p /mattermost/Portainer/data
   - chown -R 2000:2000 /mattermost/MMserver || true
   - chown -R 999:999 /mattermost/PgSQL || true
-    - [ bash, -c, "mkdir -p /mattermost/MMserver/{config,data,logs,plugins,client_plugins,bleve-indexes}" ]
+  - [ bash, -c, "mkdir -p /mattermost/MMserver/{config,data,logs,plugins,client_plugins,bleve-indexes}" ]
   - [ bash, -c, "/root/install_docker.sh" ]
   - [ bash, -c, "mkdir -p /backups" ]
   - [ bash, -c, "apt-get install -y cifs-utils" ]
@@ -202,29 +207,6 @@ runcmd:
   - [ bash, -c, "cd /mattermost && docker compose up -d" ]
   - [ bash, -c, "systemctl enable --now fail2ban" ]
   - [ bash, -c, "chown -R 2000:2000 /mattermost/MMserver" ]
+  - [ bash, -c, "systemctl restart sshd" ]
   - [ bash, -c, "chmod -R 755 /mattermost" ]
-  - bash
-  - -c
-  - |
-      set -euo pipefail
-
-      # Wait for Docker daemon
-      for i in $(seq 1 60); do
-        docker info >/dev/null 2>&1 && break
-        sleep 2
-      done
-
-      # Wait for required cert files that NGINX needs
-      for i in $(seq 1 60); do
-        if [ -s /mattermost/NGINX/cert/origin.crt ] \
-          && [ -s /mattermost/NGINX/cert/origin.key ] \
-          && [ -s /mattermost/NGINX/cert/cloudflare-origin-pull-ca.pem ]; then
-          break
-        fi
-        sleep 2
-      done
-
-      # Bring services up (again) and restart nginx to re-read certs
-      cd /mattermost
-      docker compose up -d
-      docker compose restart web
+  - [ bash, -c, "nohup bash -c 'sleep 30 && reboot' &" ]

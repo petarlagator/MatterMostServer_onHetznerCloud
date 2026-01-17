@@ -11,6 +11,8 @@ location            = "nbg1"
 
 # Your SSH public key so you can remote into the server when its created
 ssh_public_key      = "ssh-ed25519 AAAAC3... your@host"
+# SSH custom port number for security hardening (default: 46892) 
+ssh_port = 46892
 # The name of the server (VM) that you are creating on hetzner cloud
 server_name         = "MattermostTestServer.your.domain"
 # The DNS name over which this instance will be available over the internet

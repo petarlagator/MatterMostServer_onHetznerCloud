@@ -113,9 +113,14 @@ variable "enable_portainer" {
   default = true
 }
 
-
 variable "watchtower_api_token" {
   description = "HTTP API token for Watchtower (used for /v1/update etc.). Change this to a strong value."
   type        = string
   default     = "changeme-please"
+}
+
+variable "ssh_port" {
+  type        = number
+  default     = 46892
+  description = "SSH server port"
 }
