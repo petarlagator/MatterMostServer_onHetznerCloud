@@ -114,6 +114,8 @@ write_files:
             - MM_SQLSETTINGS_DATASOURCE=postgres://${db_user}:${db_password}@db:5432/${db_name}?sslmode=disable&connect_timeout=10
             - MM_SERVICESETTINGS_SITEURL=https://${domain}
             - MM_BLEVESETTINGS_INDEXDIR=/mattermost/bleve-indexes
+            - MM_EMAILSETTINGS_SENDPUSHNOTIFICATIONS=true
+            - MM_EMAILSETTINGS_PUSHNOTIFICATIONSERVER=https://push-test.mattermost.com
           volumes:
             - /mattermost/MMserver/config:/mattermost/config:rw
             - /mattermost/MMserver/data:/mattermost/data:rw
