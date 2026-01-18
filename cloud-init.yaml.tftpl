@@ -202,7 +202,7 @@ runcmd:
   - [ bash, -c, "/root/install_docker.sh" ]
   - [ bash, -c, "mkdir -p /backups" ]
   - [ bash, -c, "apt-get install -y cifs-utils" ]
-  - [ bash, -c, "echo '//${storage_box_host}/backup /backups cifs username=${storage_box_user},password=${storage_box_password},iocharset=utf8,vers=3.0,noperm 0 0' >> /etc/fstab" ]
+  - [ bash, -c, "echo '//${storage_box_host}/backup /backups cifs username=${storage_box_user},password=${storage_box_password},vers=3.0 0 0' >> /etc/fstab" ]
   - [ bash, -c, "mount -a || true" ]
   - [ bash, -c, "mkdir -p /backups/MMserver /backups/PgSQL" ]
   - [ bash, -c, "curl -fsSL https://developers.cloudflare.com/ssl/static/authenticated_origin_pull_ca.pem -o /mattermost/NGINX/cert/cloudflare-origin-pull-ca.pem" ]
