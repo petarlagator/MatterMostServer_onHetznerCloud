@@ -9,6 +9,11 @@ packages:
   - lsb-release
   - cifs-utils
   - fail2ban
+  - unattended-upgrades
+  - update-notifier-common
+  - postfix
+  - libsasl2-modules
+  - mailutils
 
 write_files:
   - path: /etc/ssh/sshd_config.d/custom_port.conf
@@ -28,6 +33,100 @@ write_files:
       apt-get update
       apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
       systemctl enable --now docker
+
+  - path: /etc/postfix/main.cf
+    permissions: '0644'
+    content: |
+      # Postfix main configuration for SMTP relay
+      smtpd_banner = $myhostname ESMTP
+      biff = no
+      append_dot_mydomain = no
+      readme_directory = no
+      compatibility_level = 3.6
+      
+      # TLS parameters
+      smtpd_tls_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
+      smtpd_tls_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+      smtpd_tls_security_level=may
+      smtp_tls_CApath=/etc/ssl/certs
+      smtp_tls_security_level=may
+      smtp_tls_session_cache_database = btree:$${data_directory}/smtp_scache
+      
+      # Network settings
+      myhostname = ${domain}
+      alias_maps = hash:/etc/aliases
+      alias_database = hash:/etc/aliases
+      myorigin = ${domain}
+      mydestination = localhost
+      relayhost = [${smtp_server}]:${smtp_port}
+      mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+      mailbox_size_limit = 0
+      recipient_delimiter = +
+      inet_interfaces = loopback-only
+      inet_protocols = all
+      
+      # SMTP authentication for relay
+      smtp_sasl_auth_enable = yes
+      smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+      smtp_sasl_security_options = noanonymous
+      smtp_sasl_tls_security_options = noanonymous
+
+  - path: /etc/postfix/sasl_passwd
+    permissions: '0600'
+    content: |
+      [${smtp_server}]:${smtp_port} ${smtp_username}:${smtp_password}
+
+  - path: /etc/apt/apt.conf.d/50unattended-upgrades
+    permissions: '0644'
+    content: |
+      // Automatically upgrade packages from these origin patterns
+      Unattended-Upgrade::Allowed-Origins {
+        "$${distro_id}:$${distro_codename}-security";
+        // Uncomment to also include updates (not just security)
+        // "$${distro_id}:$${distro_codename}-updates";
+      };
+      
+      // List of packages to not update (regexp are supported)
+      Unattended-Upgrade::Package-Blacklist {
+      };
+      
+      // Send email notifications on errors
+      Unattended-Upgrade::Mail "${sysadmin_email}";
+      Unattended-Upgrade::MailReport "only-on-error";
+      Unattended-Upgrade::Sender "${smtp_username}";
+      
+      // Automatically reboot if needed after updates
+      Unattended-Upgrade::Automatic-Reboot "true";
+      
+      // Reboot time (24-hour format)
+      Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+      
+      // Automatically reboot even if users are logged in
+      Unattended-Upgrade::Automatic-Reboot-WithUsers "true";
+      
+      // Remove unused kernel packages and dependencies
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+      
+      // Log results
+      Unattended-Upgrade::SyslogEnable "true";
+      Unattended-Upgrade::SyslogFacility "daemon";
+
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: '0644'
+    content: |
+      // Enable automatic updates
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  - path: /etc/cron.d/unattended-upgrades-tuesday
+    permissions: '0644'
+    content: |
+      # Run unattended-upgrades every Tuesday at 4:00 AM
+      # Disable the default systemd timer and use cron for precise scheduling
+      0 4 * * 2 root /usr/bin/unattended-upgrade -v
 
   - path: /mattermost/NGINX/nginx.conf
     permissions: '0644'
@@ -214,9 +313,13 @@ runcmd:
   - [ bash, -c, "mount -a || true" ]
   - [ bash, -c, "mkdir -p /backups/MMserver /backups/PgSQL" ]
   - [ bash, -c, "curl -fsSL https://developers.cloudflare.com/ssl/static/authenticated_origin_pull_ca.pem -o /mattermost/NGINX/cert/cloudflare-origin-pull-ca.pem" ]
+  - [ bash, -c, "postmap /etc/postfix/sasl_passwd" ]
+  - [ bash, -c, "systemctl restart postfix" ]
   - [ bash, -c, "cd /mattermost && docker compose up -d" ]
   - [ bash, -c, "systemctl enable --now fail2ban" ]
   - [ bash, -c, "chown -R 2000:2000 /mattermost/MMserver" ]
+  - [ bash, -c, "systemctl disable apt-daily.timer apt-daily-upgrade.timer" ]
+  - [ bash, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer" ]
   - [ bash, -c, "systemctl restart sshd" ]
   - [ bash, -c, "chmod -R 755 /mattermost" ]
   - [ bash, -c, "nohup bash -c 'sleep 30 && reboot' &" ]
