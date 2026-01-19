@@ -178,3 +178,9 @@ variable "reply_to_address" {
   description = "Email address used in the Reply-To header when sending notification emails"
   default     = ""
 }
+
+variable "sysadmin_email" {
+  type        = string
+  description = "System administrator email address for OS security update notifications (failures and errors)"
+  default     = ""
+}
