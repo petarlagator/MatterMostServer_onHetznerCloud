@@ -18,10 +18,12 @@ This project provisions a Hetzner VM, installs Docker, and starts Mattermost + P
   - Cloudflare Authenticated Origin Pulls (AOP) so NGINX only serves HTTPS when requests come via Cloudflare (prevents direct-IP bypass)
 - **Automated maintenance**:
   - Automatic security updates scheduled for Tuesdays at 4:00 AM
+  - Email notifications on security update failures
   - Daily database backups with retention
   - Periodic Mattermost files/config archive with retention
 - **SMTP email configuration**:
   - Email settings configured via Terraform variables
+  - Shared SMTP configuration for both Mattermost and OS notifications
   - No manual System Console configuration needed
 
 ## Architecture overview
@@ -80,6 +82,7 @@ The server is configured with automated maintenance tasks that run at scheduled 
 - **Only security patches are installed** (not general updates) to minimize risk of breaking changes
 - **Automatic reboot occurs if needed** (e.g., kernel updates) at 4:30 AM
 - **Backups complete before updates** ensuring fresh backups exist before any system changes
+- **Email notifications sent on failures** to the configured sysadmin email address
 - **All maintenance activities are logged** to syslog for audit purposes
 - The Tuesday 4:00 AM time slot is chosen to minimize impact on users
 
@@ -110,22 +113,40 @@ To change the security update schedule, modify the cron entry in `cloud-init.yam
 
 ## SMTP Email Configuration
 
-Email functionality is configured via Terraform variables and passed to the Mattermost container. This eliminates the need for manual configuration in the System Console.
+Email functionality is configured via Terraform variables. The same SMTP credentials are used for both:
+1. **Mattermost application emails** (password resets, notifications, etc.)
+2. **OS-level security update notifications** (failure alerts)
 
 ### Required Variables
 
 Add these to your `terraform.auto.tfvars`:
 
 ```hcl
+# SMTP credentials (shared by Mattermost and OS notifications)
 smtp_username            = "your-email@gmail.com"
 smtp_password            = "your-app-password"
 smtp_server              = "smtp.gmail.com"
 smtp_port                = 587
 smtp_connection_security = "STARTTLS"
 enable_smtp_auth         = true
-feedback_email           = "mattermost@your.domain"
-reply_to_address         = "noreply@your.domain"
+
+# Mattermost email settings
+feedback_email   = "mattermost@your.domain"  # Sender for Mattermost emails
+reply_to_address = "noreply@your.domain"     # Reply-to for Mattermost
+
+# System administrator email for OS update notifications
+sysadmin_email = "admin@your.domain"  # Receives security update failure alerts
 ```
+
+### Email Notification Behavior
+
+**Security Update Notifications** are configured as `only-on-error`:
+- ✅ **Successful updates** - No email sent (silent operation)
+- ❌ **Failed updates** - Email sent to `sysadmin_email` with error details
+- ❌ **Package conflicts** - Email sent with conflict information
+- ❌ **Download failures** - Email sent with failure reasons
+
+This ensures you're only notified when something needs attention, not on every successful update.
 
 ### Common SMTP Providers
 
@@ -134,9 +155,24 @@ reply_to_address         = "noreply@your.domain"
 - **Outlook.com**: `smtp-mail.outlook.com:587`
 - **SendGrid**: `smtp.sendgrid.net:587`
 
+### Testing Email Configuration
+
+After deployment, test the OS email system:
+```bash
+# SSH into your server
+ssh -p 46892 root@your-server-ip
+
+# Send a test email
+echo "Test email from Mattermost server" | mail -s "Test Email" admin@your.domain
+
+# Check mail logs
+sudo tail -f /var/log/mail.log
+```
+
 ## Security Features
 
 - **Automated security updates** - Only security patches, scheduled for predictable maintenance window
+- **Email alerts on failures** - Immediate notification if updates encounter errors
 - **Cloudflare Authenticated Origin Pulls** - Server only responds to Cloudflare requests
 - **Geographic restriction** - Optional country-based access control via Cloudflare
 - **Custom SSH port** - Reduces automated attack surface
@@ -164,6 +200,24 @@ sudo unattended-upgrade -v
 
 ```bash
 sudo cat /etc/cron.d/unattended-upgrades-tuesday
+```
+
+### Testing Email Notifications
+
+To test if email notifications work:
+```bash
+# This will trigger a dry-run and send a test if configured
+sudo unattended-upgrade --dry-run -d
+```
+
+### Checking Postfix Mail Queue
+
+```bash
+# View mail queue
+sudo mailq
+
+# View Postfix logs
+sudo tail -f /var/log/mail.log
 ```
 
 ## License
