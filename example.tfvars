@@ -42,7 +42,8 @@ restrict_to_cloudflare_ips = true
 # Enable portainer if you want a GUI for viewing container statuses inside the server. Disable if you do it via CLI or want to save on resources. 
 enable_portainer           = true
 
-# SMTP Configuration for Mattermost email notifications
+# SMTP Configuration
+# These credentials are used for both Mattermost email notifications AND OS-level security update notifications
 # Configure these to enable email functionality (password resets, notifications, etc.)
 smtp_username            = "your-email@example.com"
 smtp_password            = "your-smtp-password"
@@ -50,5 +51,9 @@ smtp_server              = "smtp.example.com"  # e.g., smtp.gmail.com, smtp.offi
 smtp_port                = 587                  # 587 for STARTTLS, 465 for TLS
 smtp_connection_security = "STARTTLS"           # STARTTLS, TLS, or empty string
 enable_smtp_auth         = true
-feedback_email           = "mattermost@your.domain"  # Email shown as sender
-reply_to_address         = "noreply@your.domain"     # Reply-to address
+feedback_email           = "mattermost@your.domain"  # Email shown as sender in Mattermost
+reply_to_address         = "noreply@your.domain"     # Reply-to address for Mattermost
+
+# System administrator email for OS security update failure notifications
+# This email will receive alerts if automatic security updates encounter errors
+sysadmin_email = "admin@your.domain"
