@@ -93,7 +93,7 @@ write_files:
       // Send email notifications on errors
       Unattended-Upgrade::Mail "${sysadmin_email}";
       Unattended-Upgrade::MailReport "only-on-error";
-      Unattended-Upgrade::Sender "root@${domain}";
+      Unattended-Upgrade::Sender "${smtp_username}";
       
       // Automatically reboot if needed after updates
       Unattended-Upgrade::Automatic-Reboot "true";
