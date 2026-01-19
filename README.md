@@ -62,19 +62,41 @@ terraform apply
 
 5) Access your Mattermost instance at `https://your.domain` and complete the initial setup.
 
-## Performance
+## Performance - 🏆 CPX32 is the Champion!
 
-Comprehensive load tests reveal **CX33 (4 Intel cores) offers best performance at 1000 users** at the same price as CPX22. For 750 users and below, **CPX22 (2 AMD EPYC cores)** is unbeatable. See [PERFORMANCE.md](PERFORMANCE.md) for detailed benchmarks.
+Comprehensive load tests reveal **CPX32 (4 AMD EPYC cores) is the ULTIMATE WINNER** - handling 1500 concurrent users with 35ms median response and 99.58% success rate! See [PERFORMANCE.md](PERFORMANCE.md) for complete benchmarks.
 
-| Instance | CPU Type | Cores | Price/mo | Best For | Median @ Peak | Value |
-|----------|----------|-------|----------|----------|---------------|-------|
-| **CX23** | Intel (shared) | 2 | €5.04 | 400 users | 46ms | ⭐⭐⭐ |
-| **CPX22** | AMD EPYC (shared) | 2 | €6.44 | **750 users** | **35ms** | ⭐⭐⭐⭐⭐ **Best Value** |
-| **CCX13** | AMD EPYC (dedicated) | 2 | €10.50 | 900 users | 33ms | ⭐⭐⭐ |
-| **CX33** | Intel (shared) | 4 | €6.44 | **1000 users** | **46ms** | ⭐⭐⭐⭐⭐ **Best Performance** |
-| **CPX32** | AMD EPYC (shared) | 4 | €13.90 | _Testing_ | _TBD_ | ⏳ |
+### 📊 All Instances @ 1250 Users - THE SHOWDOWN
 
-**Key Finding**: At 1000 users, CX33 (4 Intel cores) outperforms CPX22 (2 AMD cores) despite slower per-core performance. More cores win when PostgreSQL can parallelize effectively.
+| Instance | CPU Type | Cores | Price/mo | Median | 95%ile | 99%ile | Failures | CPU Idle | Winner? |
+|----------|----------|-------|----------|--------|--------|--------|----------|----------|---------|
+| **CPX22** | AMD EPYC | 2 | €6 | 470ms | 2200ms | 3100ms | **4.5%** | 23% | ❌ Failed |
+| **CCX13** | AMD EPYC (ded) | 2 | €12 | 930ms | 3100ms | 7100ms | **6.7%** | 0% | ❌ Failed |
+| **CX33** | Intel | 4 | €5 | 1000ms | 3100ms | 4200ms | **6.0%** | 59% | ❌ Failed |
+| **CPX32** | AMD EPYC | 4 | **€10.50** | **35ms** | **190ms** | **440ms** | **0.07%** | **24%** | ✅ **CHAMPION** |
+
+**CPX32 is 93-96% faster with 98-99% fewer failures than all others!**
+
+### Quick Recommendations
+
+| Your Scale | Best Instance | Price | Capacity | Median | Why |
+|------------|--------------|-------|----------|--------|-----|
+| **0-400 users** | **CX23** | €3/mo | 400 | 46ms | Cheapest, good enough |
+| **400-750 users** | **CPX22** | €6/mo | 750 | **35ms** | Best value, fastest at this scale |
+| **750-1000 users** | **CX33** | €5/mo | 1000 | 46ms | More cores, great value |
+| **1000-1500+ users** | **CPX32** | **€10.50/mo** | **1500+** | **35ms** | **Unbeatable performance!** |
+
+### Value Analysis
+
+| Instance | Peak Capacity | Price | Cost per 100 Users | Value Rating |
+|----------|---------------|-------|-------------------|--------------|
+| CX23 | 400 | €3.00 | €0.75 | ⭐⭐⭐ |
+| CPX22 | 750 | €6.00 | €0.80 | ⭐⭐⭐⭐⭐ Best Budget |
+| CX33 | 1000 | €5.00 | **€0.50** | ⭐⭐⭐⭐⭐ Best Value |
+| CCX13 | 900 | €12.00 | €1.33 | ⭐⭐⭐ Premium |
+| **CPX32** | **1500+** | **€10.50** | **€0.70** | ⭐⭐⭐⭐⭐ **Best Performance** |
+
+**Key Finding**: 4 AMD EPYC cores (CPX32) = best of both worlds. Fast single-thread performance + excellent parallelization. Worth every cent for 1000+ users!
 
 ## Maintenance Timeline Schedule
 
