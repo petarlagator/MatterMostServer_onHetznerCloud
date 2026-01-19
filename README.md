@@ -64,16 +64,17 @@ terraform apply
 
 ## Performance
 
-Comprehensive load tests reveal **AMD EPYC processors dramatically outperform Intel** for Mattermost workloads. **CPX22 (2 AMD cores)** offers the best price/performance ratio. See [PERFORMANCE.md](PERFORMANCE.md) for detailed benchmarks.
+Comprehensive load tests reveal **CX33 (4 Intel cores) offers best performance at 1000 users** at the same price as CPX22. For 750 users and below, **CPX22 (2 AMD EPYC cores)** is unbeatable. See [PERFORMANCE.md](PERFORMANCE.md) for detailed benchmarks.
 
-| Instance | CPU Type | Cores | Price/mo | Safe Capacity | Median | Value |
-|----------|----------|-------|----------|---------------|--------|-------|
+| Instance | CPU Type | Cores | Price/mo | Best For | Median @ Peak | Value |
+|----------|----------|-------|----------|----------|---------------|-------|
 | **CX23** | Intel (shared) | 2 | €5.04 | 400 users | 46ms | ⭐⭐⭐ |
-| **CPX22** | AMD EPYC (shared) | 2 | €6.44 | **750 users** | **35ms** | ⭐⭐⭐⭐⭐ **Best** |
+| **CPX22** | AMD EPYC (shared) | 2 | €6.44 | **750 users** | **35ms** | ⭐⭐⭐⭐⭐ **Best Value** |
 | **CCX13** | AMD EPYC (dedicated) | 2 | €10.50 | 900 users | 33ms | ⭐⭐⭐ |
-| **CX33** | Intel (shared) | 4 | €6.44 | _Testing_ | _TBD_ | ⏳ |
+| **CX33** | Intel (shared) | 4 | €6.44 | **1000 users** | **46ms** | ⭐⭐⭐⭐⭐ **Best Performance** |
+| **CPX32** | AMD EPYC (shared) | 4 | €13.90 | _Testing_ | _TBD_ | ⏳ |
 
-**Key Finding**: CPX22 handles **88% more users** than CX23 at only 28% higher cost. Dedicated cores (CCX13) provide 20% more capacity but cost 63% more—only worth it for guaranteed performance without noisy neighbors.
+**Key Finding**: At 1000 users, CX33 (4 Intel cores) outperforms CPX22 (2 AMD cores) despite slower per-core performance. More cores win when PostgreSQL can parallelize effectively.
 
 ## Maintenance Timeline Schedule
 
