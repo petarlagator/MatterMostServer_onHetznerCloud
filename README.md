@@ -62,6 +62,17 @@ terraform apply
 
 5) Access your Mattermost instance at `https://your.domain` and complete the initial setup.
 
+## Performance
+
+Synthetic load tests show a **Hetzner CX23 (2 vCPU, 4GB RAM)** can comfortably handle **200-300 concurrent active users** with sub-50ms response times. At 400-500 users, performance remains acceptable with some degradation. See [PERFORMANCE.md](PERFORMANCE.md) for detailed benchmarks and testing methodology.
+
+| Instance Type | Concurrent Users | Median Response | Status |
+|--------------|------------------|-----------------|--------|
+| CX23 (2 vCPU, 4GB) | 200 | 47ms | ✅ Excellent |
+| CX23 (2 vCPU, 4GB) | 400 | 46ms | ⚠️ CPU maxed |
+| CX23 (2 vCPU, 4GB) | 750 | 1000ms | ❌ Degraded |
+| CPX22 | _Pending_ | _TBD_ | ⏳ Testing |
+
 ## Maintenance Timeline Schedule
 
 The server is configured with automated maintenance tasks that run at scheduled times to ensure reliability and security:
