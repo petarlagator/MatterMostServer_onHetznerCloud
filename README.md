@@ -64,14 +64,15 @@ terraform apply
 
 ## Performance
 
-Synthetic load tests show a **Hetzner CX23 (2 vCPU, 4GB RAM)** can comfortably handle **200-300 concurrent active users** with sub-50ms response times. At 400-500 users, performance remains acceptable with some degradation. See [PERFORMANCE.md](PERFORMANCE.md) for detailed benchmarks and testing methodology.
+Synthetic load tests comparing Hetzner instance types show significant performance differences. **AMD EPYC processors (CPX series) dramatically outperform Intel (CX series)** for Mattermost workloads. See [PERFORMANCE.md](PERFORMANCE.md) for detailed benchmarks.
 
-| Instance Type | Concurrent Users | Median Response | Status |
-|--------------|------------------|-----------------|--------|
-| CX23 (2 vCPU, 4GB) | 200 | 47ms | ✅ Excellent |
-| CX23 (2 vCPU, 4GB) | 400 | 46ms | ⚠️ CPU maxed |
-| CX23 (2 vCPU, 4GB) | 750 | 1000ms | ❌ Degraded |
-| CPX22 | _Pending_ | _TBD_ | ⏳ Testing |
+| Instance | CPU Type | Price/mo | Concurrent Users | Median | Status |
+|----------|----------|----------|------------------|--------|--------|
+| **CX23** | Intel (shared) | €5.04 | 400 | 46ms | ⚠️ CPU maxed |
+| **CPX22** | AMD EPYC (shared) | €6.44 | **750** | 35ms | ✅ **Recommended** |
+| CCX13 | AMD EPYC (dedicated) | €10.50 | _Testing_ | _TBD_ | ⏳ |
+
+**Key Finding**: CPX22 handles **88% more concurrent users** than CX23 at only 28% higher cost, making it the best value option.
 
 ## Maintenance Timeline Schedule
 
