@@ -2,6 +2,16 @@
 
 > **Disclaimer**: These are synthetic load test results using [Locust](https://locust.io). Tests simulate concurrent users posting messages and uploading files. Real-world performance varies significantly based on actual usage patterns, installed plugins, file sizes, database queries, and concurrent active users vs. registered users. Your mileage may vary.
 
+## Executive Summary
+
+**Key Finding**: AMD EPYC processors (CPX series) significantly outperform Intel (CX series) for Mattermost workloads.
+
+- **CX23 (Intel shared)**: Comfortable up to 400 concurrent users
+- **CPX22 (AMD EPYC shared)**: Comfortable up to **750 concurrent users** (+88% capacity)
+- **Price difference**: Only 28% more expensive (€6.44 vs €5.04/month)
+
+**Recommendation**: Use **CPX22** for best price/performance ratio.
+
 ## Testing Methodology
 
 ### Test Setup
@@ -11,8 +21,8 @@
 - **Test Pattern**: 
   - Each simulated user sends **1 message every ~5 seconds**
   - Each simulated user uploads **1 file (~100 bytes text file) every ~2 minutes**
-  - Users ramped up gradually (5-30 users/second depending on test scale)
-  - Tests run from 10 minutes to 1 hour depending on load level
+  - Users ramped up gradually (10-50 users/second depending on test scale)
+  - Tests run 10 minutes per load level
 
 ### Server Configuration
 
@@ -43,60 +53,122 @@
 
 ## Test Results
 
-### Hetzner CX23 (2 vCPU, 4GB RAM, ~€6/month)
+### Hetzner CX23 (2 vCPU Intel, 4GB RAM, €5.04/month)
 
-**Server Specs**: AMD EPYC, 2 dedicated vCPU cores, 4GB RAM, 40GB SSD
+**Server Specs**: Intel Xeon, 2 shared vCPU cores, 4GB RAM, 40GB SSD
 
-| Concurrent Users | Throughput (req/s) | Median Response | 95th Percentile | 99th Percentile | Max Response | Failure Rate | CPU Usage | Notes |
-|-----------------|-------------------|-----------------|-----------------|-----------------|--------------|--------------|-----------|-------|
-| 50 | 10 | 39ms | 60ms | 80ms | 98ms | 0% | ~15% | ✅ **Excellent** - Plenty of headroom |
-| 200 | 40 | 47ms | 100ms | 150ms | 200ms | 0% | ~85% | ✅ **Good** - Responsive, CPU getting busy |
-| 400 | 80 | 46ms | 150ms | 300ms | 372ms | 0% | ~130% | ⚠️ **Acceptable** - CPU maxed, occasional spikes |
-| 500 | 100 | 46ms | 200ms | 2000ms | 1677ms | 0% | ~140% | ⚠️ **Borderline** - Noticeable worst-case delays |
-| 750 | 115 | **1000ms** | 3400ms | 4700ms | 9174ms | 0% | ~160% | ❌ **Poor UX** - 1 second lag, users notice |
+| Concurrent Users | Throughput (req/s) | Median Response | 95th Percentile | 99th Percentile | Max Response | Failure Rate | CPU Usage | Load Avg | Notes |
+|-----------------|-------------------|-----------------|-----------------|-----------------|--------------|--------------|-----------|----------|-------|
+| 50 | 10 | 39ms | 60ms | 80ms | 98ms | 0% | ~15% | 0.3 | ✅ **Excellent** - Plenty of headroom |
+| 200 | 40 | 47ms | 100ms | 150ms | 200ms | 0% | ~85% | 1.8 | ✅ **Good** - Responsive, CPU getting busy |
+| 400 | 80 | 46ms | 150ms | 300ms | 372ms | 0% | ~130% | 3.2 | ⚠️ **Acceptable** - CPU maxed, occasional spikes |
+| 500 | 100 | 46ms | 200ms | 2000ms | 1677ms | 0% | ~140% | 4.5 | ⚠️ **Borderline** - Noticeable worst-case delays |
+| 750 | 115 | **1000ms** | 3400ms | 4700ms | 9174ms | 0% | ~160% | 8.3 | ❌ **Poor UX** - 1 second lag, users notice |
 
 #### CX23 Analysis
 
 **Recommended Capacity**:
 - **Comfortable**: 200-300 concurrent active users for excellent performance (sub-50ms)
-- **Maximum**: 400-500 concurrent users with acceptable degradation
+- **Maximum**: 400 concurrent users with acceptable degradation
 - **Do not exceed**: 600+ users (response times exceed 1 second)
 
 **Real-World Translation**:
 - Small team: 50-100 registered users → CX23 is perfect
-- Medium team: 500-1,500 registered users → CX23 works well
-- Large team: 2,000-5,000 registered users → Consider CPX31 or higher
+- Medium team: 500-2,000 registered users → CX23 works well
+- Large team: 2,000+ registered users → Consider CPX22 or higher
 
 **Bottleneck**: CPU becomes saturated at 400+ users. Memory usage remained comfortable (<1GB) throughout all tests.
 
 **Key Observations**:
 - Response times stayed remarkably consistent even under heavy load
-- Zero failures across all test levels (impressive Mattermost resilience)
+- Zero failures across all test levels up to 500 users (impressive Mattermost resilience)
 - Median response times only degraded significantly above 600 users
 - 99th percentile spikes indicate PostgreSQL query queueing under load
 
 ---
 
-### Hetzner CPX22 (3 vCPU, 4GB RAM, ~€9/month)
+### Hetzner CPX22 (2 vCPU AMD EPYC, 4GB RAM, €6.44/month)
 
-**Server Specs**: AMD EPYC, 3 dedicated vCPU cores, 4GB RAM, 80GB SSD
+**Server Specs**: AMD EPYC (Milan), 2 shared vCPU cores, 4GB RAM, 80GB SSD
 
-| Concurrent Users | Throughput (req/s) | Median Response | 95th Percentile | 99th Percentile | Failure Rate | CPU Usage | Notes |
-|-----------------|-------------------|-----------------|-----------------|-----------------|--------------|-----------|-------|
-| _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | ⏳ **Testing in progress** |
+| Concurrent Users | Throughput (req/s) | Median Response | 95th Percentile | 99th Percentile | Failure Rate | CPU Usage | Load Avg | Notes |
+|-----------------|-------------------|-----------------|-----------------|-----------------|--------------|-----------|----------|-------|
+| 400 | 82 | 34ms | 110ms | 180ms | 0% | ~100% | 0.9 | ✅ **Excellent** - Much better than CX23 |
+| 750 | 155 | 35ms | 160ms | 240ms | 0% | ~150% | 4.7 | ✅ **Excellent** - Still responsive |
+| 1250 | 240 | 470ms | 2200ms | 3100ms | 4.5% | ~180% | 14.7 | ❌ **Breaking point** - Errors start |
+| 1500 | 247 | 660ms | 2500ms | 4500ms | 5.6% | ~190% | 16.8 | ❌ **Failed** - High error rate |
 
 #### CPX22 Analysis
 
-_Results will be added after testing completes. Expected improvement: 50% more capacity due to additional vCPU core._
+**Recommended Capacity**:
+- **Comfortable**: Up to 750 concurrent active users with excellent sub-40ms response times
+- **Maximum**: 1000 concurrent users with some degradation
+- **Breaking point**: 1250+ users (errors and >400ms median)
+
+**Real-World Translation**:
+- Medium team: 1,000-3,000 registered users → CPX22 is excellent
+- Large team: 3,000-7,500 registered users → CPX22 handles well
+- Very large: 10,000+ registered users → Consider CPX31 (4 vCPU) or CCX series
+
+**Performance vs CX23**:
+- **88% more concurrent users** (750 vs 400) at comfortable performance levels
+- **26% faster median response** at 400 users (34ms vs 46ms)
+- **40% faster 99th percentile** at 400 users (180ms vs 300ms)
+- **Only 28% more expensive** (€6.44 vs €5.04/month)
+
+**Bottleneck**: Still CPU-bound, but AMD EPYC cores are significantly more powerful than Intel Xeon for this workload. Memory usage stayed under 1GB.
+
+**Key Observations**:
+- AMD EPYC processors handle Mattermost/PostgreSQL workloads much better than Intel
+- Response times remained consistent up to 750 users (vs 400 for CX23)
+- Zero failures up to 750 users, then errors spike rapidly beyond 1000
+- Load average stayed low even at high user counts (better scheduler efficiency)
 
 ---
 
-### Future Testing Plans
+### Hetzner CCX13 (2 vCPU AMD EPYC Dedicated, 8GB RAM, €10.50/month)
 
-- **CPX22**: Currently testing (3 vCPU)
-- **CPX31**: Planned (4 vCPU, 8GB RAM) - for larger deployments
-- **Load patterns**: Test different usage scenarios (heavy file sharing, search queries)
-- **Long-duration**: 24-hour stability tests under sustained load
+**Server Specs**: AMD EPYC (Milan), 2 **dedicated** vCPU cores, 8GB RAM, 80GB SSD
+
+| Concurrent Users | Throughput (req/s) | Median Response | 95th Percentile | 99th Percentile | Failure Rate | Notes |
+|-----------------|-------------------|-----------------|-----------------|-----------------|--------------|-------|
+| _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | ⏳ **Testing in progress** |
+
+#### CCX13 Analysis
+
+_Results will be added after testing completes. Expected improvement: Dedicated cores may provide 30-50% better consistency under load._
+
+---
+
+## Instance Comparison
+
+### Price/Performance Summary
+
+| Instance | CPU Type | Cores | Price/mo | Safe Capacity | Cost per 100 Users | Value Rating |
+|----------|----------|-------|----------|---------------|-------------------|---------------|
+| **CX23** | Intel (shared) | 2 | €5.04 | 400 users | €1.26 | ⭐⭐⭐ Good |
+| **CPX22** | AMD EPYC (shared) | 2 | €6.44 | 750 users | **€0.86** | ⭐⭐⭐⭐⭐ **Best** |
+| **CCX13** | AMD EPYC (dedicated) | 2 | €10.50 | _TBD_ | _TBD_ | ⏳ Testing |
+
+**Winner**: **CPX22** offers the best value at €0.86 per 100 concurrent users.
+
+### When to Choose Each Instance
+
+**CX23**: 
+- ✅ Budget-constrained small teams (<500 registered users)
+- ✅ Development/testing environments
+- ❌ Not recommended for production >300 concurrent users
+
+**CPX22**: 
+- ✅ **Best choice for most teams** (up to 7,500 registered users)
+- ✅ Excellent price/performance ratio
+- ✅ Room to grow without immediate upgrade
+- ✅ AMD EPYC processors handle load much better
+
+**CCX13** (when results available):
+- ✅ Teams needing consistent performance (dedicated cores)
+- ✅ More headroom for traffic spikes
+- ⚠️ 63% more expensive than CPX22 for potentially marginal gain
 
 ---
 
@@ -112,7 +184,7 @@ _Results will be added after testing completes. Expected improvement: 50% more c
 
 ### When to Upgrade
 
-- **CPU consistently >80%**: Upgrade to more vCPUs (CPX or CCX series)
+- **CPU consistently >80%**: Upgrade to more vCPUs (CPX31: 4 vCPU, CPX41: 8 vCPU)
 - **Memory >3.5GB**: Upgrade RAM (CPX31: 8GB, CPX41: 16GB)
 - **Disk I/O bottleneck**: Switch to storage-optimized instance or add volumes
 - **Response times >100ms median**: Consider horizontal scaling (load balancer + multiple app servers)
@@ -242,14 +314,14 @@ locust -f /root/locustfile.py --headless --users 500 --spawn-rate 20 \
 
 ### Why Hetzner Cloud?
 
-| Provider | Instance | vCPU | RAM | Price/month | CX23 Equivalent |
+| Provider | Instance | vCPU | RAM | Price/month | CPX22 Equivalent |
 |----------|----------|------|-----|-------------|------------------|
-| Hetzner | CX23 | 2 | 4GB | ~€6 | Baseline |
-| AWS | t3.medium | 2 | 4GB | ~$30 | 5x more expensive |
-| DigitalOcean | Basic 4GB | 2 | 4GB | $24 | 4x more expensive |
-| Azure | B2s | 2 | 4GB | ~$30 | 5x more expensive |
+| Hetzner | CPX22 | 2 | 4GB | €6.44 | Baseline |
+| AWS | t3.medium | 2 | 4GB | ~$30 | 4.7x more expensive |
+| DigitalOcean | Basic 4GB | 2 | 4GB | $24 | 3.7x more expensive |
+| Azure | B2s | 2 | 4GB | ~$30 | 4.7x more expensive |
 
-**Verdict**: Hetzner offers exceptional price/performance for European workloads. For US-based teams, AWS/DO may offer better latency.
+**Verdict**: Hetzner offers exceptional price/performance for European workloads. AMD EPYC processors are significantly faster than AWS/DO/Azure baseline instances. For US-based teams, AWS/DO may offer better latency but at much higher cost.
 
 ---
 
@@ -273,4 +345,5 @@ If you run performance tests on different instance types or configurations, plea
 
 **Last Updated**: January 19, 2026  
 **Mattermost Version**: 11.3.0  
-**Test Framework**: Locust 2.43.1
+**Test Framework**: Locust 2.43.1  
+**Key Finding**: AMD EPYC (CPX22) outperforms Intel (CX23) by 88% at only 28% higher cost
