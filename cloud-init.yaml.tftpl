@@ -116,6 +116,14 @@ write_files:
             - MM_BLEVESETTINGS_INDEXDIR=/mattermost/bleve-indexes
             - MM_EMAILSETTINGS_SENDPUSHNOTIFICATIONS=true
             - MM_EMAILSETTINGS_PUSHNOTIFICATIONSERVER=https://push-test.mattermost.com
+            - MM_EMAILSETTINGS_SMTPUSERNAME=${smtp_username}
+            - MM_EMAILSETTINGS_SMTPPASSWORD=${smtp_password}
+            - MM_EMAILSETTINGS_SMTPSERVER=${smtp_server}
+            - MM_EMAILSETTINGS_SMTPPORT=${smtp_port}
+            - MM_EMAILSETTINGS_CONNECTIONSECURITY=${smtp_connection_security}
+            - MM_EMAILSETTINGS_ENABLESMTPAUTH=${enable_smtp_auth}
+            - MM_EMAILSETTINGS_FEEDBACKEMAIL=${feedback_email}
+            - MM_EMAILSETTINGS_REPLYTOADDRESS=${reply_to_address}
           volumes:
             - /mattermost/MMserver/config:/mattermost/config:rw
             - /mattermost/MMserver/data:/mattermost/data:rw

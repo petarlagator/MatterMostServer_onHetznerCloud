@@ -124,3 +124,57 @@ variable "ssh_port" {
   default     = 46892
   description = "SSH server port"
 }
+
+# SMTP Configuration Variables
+variable "smtp_username" {
+  type        = string
+  description = "SMTP authentication username"
+  default     = ""
+}
+
+variable "smtp_password" {
+  type        = string
+  description = "SMTP authentication password"
+  sensitive   = true
+  default     = ""
+}
+
+variable "smtp_server" {
+  type        = string
+  description = "SMTP server hostname (e.g., smtp.gmail.com)"
+  default     = ""
+}
+
+variable "smtp_port" {
+  type        = number
+  description = "SMTP server port (e.g., 587 for STARTTLS, 465 for TLS)"
+  default     = 587
+}
+
+variable "smtp_connection_security" {
+  type        = string
+  description = "SMTP connection security: STARTTLS, TLS, or empty string for none"
+  default     = "STARTTLS"
+  validation {
+    condition     = contains(["", "STARTTLS", "TLS"], var.smtp_connection_security)
+    error_message = "smtp_connection_security must be STARTTLS, TLS, or empty string."
+  }
+}
+
+variable "enable_smtp_auth" {
+  type        = bool
+  description = "Enable SMTP authentication"
+  default     = true
+}
+
+variable "feedback_email" {
+  type        = string
+  description = "Email address displayed on email notifications sent from Mattermost"
+  default     = ""
+}
+
+variable "reply_to_address" {
+  type        = string
+  description = "Email address used in the Reply-To header when sending notification emails"
+  default     = ""
+}
