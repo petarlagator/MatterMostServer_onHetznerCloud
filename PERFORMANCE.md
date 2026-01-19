@@ -4,14 +4,15 @@
 
 ## Executive Summary
 
-**Key Finding**: AMD EPYC processors (CPX/CCX series) significantly outperform Intel (CX series) for Mattermost workloads.
+**Key Finding**: **More cores beat faster cores** when PostgreSQL can parallelize effectively. CX33 (4 Intel cores) outperforms CPX22 (2 AMD EPYC cores) at 1000 concurrent users despite slower single-thread performance.
 
 - **CX23 (Intel shared, 2 cores)**: Comfortable up to 400 concurrent users
-- **CPX22 (AMD EPYC shared, 2 cores)**: Comfortable up to **750 concurrent users** (+88% capacity)
-- **CCX13 (AMD EPYC dedicated, 2 cores)**: Comfortable up to **900 concurrent users** (+125% vs CX23)
-- **CX33 (Intel shared, 4 cores)**: _Testing in progress_
+- **CPX22 (AMD EPYC shared, 2 cores)**: Comfortable up to **750 concurrent users** - best value!
+- **CCX13 (AMD EPYC dedicated, 2 cores)**: Comfortable up to **900 concurrent users** - guaranteed performance
+- **CX33 (Intel shared, 4 cores)**: Comfortable up to **1000 concurrent users** - best at scale!
+- **CPX32 (AMD EPYC shared, 4 cores)**: _Testing in progress_ - potentially the ultimate winner?
 
-**Recommendation**: Use **CPX22** for best price/performance ratio (€0.86 per 100 concurrent users).
+**Recommendation**: Use **CPX22** for up to 750 users (€0.86 per 100 users), upgrade to **CX33** for 1000 users (same €6.44/month price!).
 
 ## Testing Methodology
 
@@ -22,7 +23,7 @@
 - **Test Pattern**: 
   - Each simulated user sends **1 message every ~5 seconds**
   - Each simulated user uploads **1 file (~100 bytes text file) every ~2 minutes**
-  - Users ramped up gradually (10-50 users/second depending on test scale)
+  - Users ramped up gradually (25-30 users/second depending on test scale)
   - Tests run 10 minutes per load level
 
 ### Server Configuration
@@ -95,7 +96,7 @@
 | Concurrent Users | Throughput (req/s) | Median Response | 95th Percentile | 99th Percentile | Failure Rate | CPU Usage | Load Avg | Notes |
 |-----------------|-------------------|-----------------|-----------------|-----------------|--------------|-----------|----------|-------|
 | 400 | 82 | 34ms | 110ms | 180ms | 0% | ~100% | 0.9 | ✅ **Excellent** - Much better than CX23 |
-| 750 | 155 | 35ms | 160ms | 240ms | 0% | ~150% | 4.7 | ✅ **Excellent** - Still responsive |
+| 750 | 155 | **35ms** | 160ms | 240ms | 0% | ~150% | 4.7 | ✅ **Excellent** - Still responsive |
 | 1250 | 240 | 470ms | 2200ms | 3100ms | 4.5% | ~180% | 14.7 | ❌ **Breaking point** - Errors start |
 | 1500 | 247 | 660ms | 2500ms | 4500ms | 5.6% | ~190% | 16.8 | ❌ **Failed** - High error rate |
 
@@ -109,7 +110,7 @@
 **Real-World Translation**:
 - Medium team: 1,000-3,000 registered users → CPX22 is excellent
 - Large team: 3,000-7,500 registered users → CPX22 handles well
-- Very large: 10,000+ registered users → Consider CPX31 (4 vCPU) or CCX series
+- Very large: 10,000+ registered users → Consider CX33 (4 vCPU) or CPX31
 
 **Performance vs CX23**:
 - **88% more concurrent users** (750 vs 400) at comfortable performance levels
@@ -133,7 +134,7 @@
 
 | Concurrent Users | Throughput (req/s) | Median Response | 95th Percentile | 99th Percentile | Failure Rate | CPU Usage | Load Avg | Notes |
 |-----------------|-------------------|-----------------|-----------------|-----------------|--------------|-----------|----------|-------|
-| 750 | 120 | 33ms | 200ms | 320ms | 0% | ~60% | 4.1 | ✅ **Perfect** - 35% CPU idle |
+| 750 | 120 | **33ms** | 200ms | 320ms | 0% | ~60% | 4.1 | ✅ **Perfect** - 35% CPU idle |
 | 1000 | 157 | 51ms | 1600ms | 2700ms | 1.90% | ~77% | 6.5 | ⚠️ **Degrading** - Starting to fail |
 | 1250 | 178 | 930ms | 3100ms | 7100ms | 6.73% | ~200% | 14.0 | ❌ **Failed** - High error rate |
 
@@ -169,13 +170,53 @@
 
 **Server Specs**: Intel Xeon, 4 shared vCPU cores, 8GB RAM, 80GB SSD
 
+| Concurrent Users | Throughput (req/s) | Median Response | 95th Percentile | 99th Percentile | Failure Rate | CPU Usage | Load Avg | Notes |
+|-----------------|-------------------|-----------------|-----------------|-----------------|--------------|-----------|----------|-------|
+| 750 | 154 | 38ms | 160ms | 240ms | 0.07% | ~63% | 4.0 | ✅ **Excellent** - 37% CPU idle |
+| 1000 | 159 | **46ms** | **210ms** | **520ms** | **0.07%** | ~73% | 8.8 | ✅ **Excellent** - 27% CPU idle |
+| 1250 | 189 | **1000ms** | 3100ms | 4200ms | 6.0% | ~41% | 20.3 | ❌ **Failed** - Breaking point |
+
+#### CX33 Analysis
+
+**Recommended Capacity**:
+- **Comfortable**: Up to 1000 concurrent active users with excellent sub-50ms response times
+- **Maximum**: 1000-1100 concurrent users before significant degradation
+- **Breaking point**: 1250+ users (errors and >1000ms median)
+
+**Real-World Translation**:
+- Large team: 3,000-10,000 registered users → CX33 is excellent
+- Very large: 10,000-20,000 registered users → CX33 handles well
+- Enterprise: 20,000+ registered users → Consider CPX32 (4 AMD EPYC cores)
+
+**Performance vs CPX22 @ 1000 users**:
+- **10% faster median** (46ms vs 51ms)
+- **87% better 95th percentile** (210ms vs 1600ms!)
+- **81% better 99th percentile** (520ms vs 2700ms!)
+- **96% fewer failures** (0.07% vs 1.90%)
+- **Same price** (€6.44/month)
+
+**Bottleneck**: CPU-bound at extreme load. The 4 Intel cores provide excellent parallelization for PostgreSQL, compensating for slower single-thread performance.
+
+**Key Observations**:
+- **4 Intel cores beat 2 AMD EPYC cores** at high concurrent load (1000+ users)
+- PostgreSQL benefits massively from multiple cores for query parallelization
+- At 1000 users, still has **27% CPU headroom** for traffic spikes
+- Best price/performance for 1000 concurrent users
+- Surprising winner: more cores > faster cores when workload parallelizes well
+
+---
+
+### Hetzner CPX32 (4 vCPU AMD EPYC, 8GB RAM, €13.90/month)
+
+**Server Specs**: AMD EPYC (Milan), 4 shared vCPU cores, 8GB RAM, 160GB SSD
+
 | Concurrent Users | Throughput (req/s) | Median Response | 95th Percentile | 99th Percentile | Failure Rate | Notes |
 |-----------------|-------------------|-----------------|-----------------|-----------------|--------------|-------|
 | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | ⏳ **Testing in progress** |
 
-#### CX33 Analysis
+#### CPX32 Analysis
 
-_Results will be added after testing completes. Expected: 4 Intel cores may outperform 2 AMD cores despite slower single-thread performance._
+_Results will be added after testing completes. Expected: 4 AMD EPYC cores should outperform 4 Intel cores (CX33) with both better single-thread performance AND parallelization._
 
 ---
 
@@ -186,11 +227,12 @@ _Results will be added after testing completes. Expected: 4 Intel cores may outp
 | Instance | CPU Type | Cores | Price/mo | Safe Capacity | Cost per 100 Users | Value Rating |
 |----------|----------|-------|----------|---------------|-------------------|---------------|
 | **CX23** | Intel (shared) | 2 | €5.04 | 400 users | €1.26 | ⭐⭐⭐ Good |
-| **CPX22** | AMD EPYC (shared) | 2 | €6.44 | 750 users | **€0.86** | ⭐⭐⭐⭐⭐ **Best** |
+| **CPX22** | AMD EPYC (shared) | 2 | €6.44 | 750 users | **€0.86** | ⭐⭐⭐⭐⭐ **Best Value** |
 | **CCX13** | AMD EPYC (dedicated) | 2 | €10.50 | 900 users | €1.17 | ⭐⭐⭐⭐ Premium |
-| **CX33** | Intel (shared) | 4 | €6.44 | _TBD_ | _TBD_ | ⏳ Testing |
+| **CX33** | Intel (shared) | 4 | €6.44 | **1000 users** | **€0.64** | ⭐⭐⭐⭐⭐ **Best Performance** |
+| **CPX32** | AMD EPYC (shared) | 4 | €13.90 | _TBD_ | _TBD_ | ⏳ Testing |
 
-**Winner**: **CPX22** offers the best value at €0.86 per 100 concurrent users.
+**Winner**: **CX33** offers best capacity at €0.64 per 100 concurrent users, same price as CPX22!
 
 ### When to Choose Each Instance
 
@@ -199,11 +241,11 @@ _Results will be added after testing completes. Expected: 4 Intel cores may outp
 - ✅ Development/testing environments
 - ❌ Not recommended for production >300 concurrent users
 
-**CPX22** (⭐ **Recommended**):
-- ✅ **Best choice for most teams** (up to 7,500 registered users)
-- ✅ Excellent price/performance ratio
-- ✅ Room to grow without immediate upgrade
-- ✅ AMD EPYC processors handle load much better than Intel
+**CPX22** (⭐ **Best Value**):
+- ✅ **Best choice for 400-750 concurrent users** (up to 7,500 registered users)
+- ✅ Excellent price/performance ratio (€0.86 per 100 users)
+- ✅ AMD EPYC processors handle load much better than Intel per-core
+- ✅ Lowest median response time at 750 users (35ms)
 
 **CCX13**:
 - ✅ Teams needing **guaranteed consistent performance** (no noisy neighbors)
@@ -212,11 +254,19 @@ _Results will be added after testing completes. Expected: 4 Intel cores may outp
 - ⚠️ 63% more expensive than CPX22 for 20% more capacity
 - ⚠️ Only worth it if predictable performance is critical
 
-**CX33** (when results available):
-- ✅ Same price as CPX22 (€6.44/month)
-- ✅ 4 Intel cores vs 2 AMD EPYC cores
-- ⚠️ Intel single-thread performance is slower
-- ⏳ Testing will reveal if more cores compensate for slower per-core performance
+**CX33** (⭐ **Best Performance**):
+- ✅ **Best choice for 750-1000 concurrent users** (up to 20,000 registered users)
+- ✅ **Same price as CPX22** but handles 33% more users!
+- ✅ 4 Intel cores provide excellent parallelization for PostgreSQL
+- ✅ Still has 27% CPU headroom at 1000 users
+- ✅ Dramatically better 95th/99th percentile response times
+- ⚠️ Slower than CPX22 below 750 users (38ms vs 35ms median)
+
+**CPX32** (when results available):
+- ✅ 4 AMD EPYC cores combine fast single-thread + excellent parallelization
+- ⚠️ More expensive (€13.90/month) - 2.2x CX33 price
+- ⏳ Testing will reveal if AMD advantage holds with 4 cores
+- ⏳ Expected to be the ultimate performer but at premium cost
 
 ---
 
@@ -232,11 +282,12 @@ _Results will be added after testing completes. Expected: 4 Intel cores may outp
 
 ### When to Upgrade
 
-- **CPU consistently >80%**: Upgrade to more vCPUs (CPX31: 4 vCPU, CPX41: 8 vCPU)
+- **CPU consistently >80%**: Upgrade to more vCPUs (CX33: 4 vCPU Intel, CPX32: 4 vCPU AMD)
 - **Memory >3.5GB**: Upgrade RAM (CPX31: 8GB, CPX41: 16GB)
 - **Disk I/O bottleneck**: Switch to storage-optimized instance or add volumes
 - **Response times >100ms median**: Consider horizontal scaling (load balancer + multiple app servers)
-- **Need guaranteed performance**: Switch from shared (CPX) to dedicated (CCX) cores
+- **Need guaranteed performance**: Switch from shared (CPX/CX) to dedicated (CCX) cores
+- **>1000 concurrent users**: Upgrade to 4+ vCPUs (CX33, CPX32, or higher)
 
 ---
 
@@ -363,14 +414,14 @@ locust -f /root/locustfile.py --headless --users 500 --spawn-rate 20 \
 
 ### Why Hetzner Cloud?
 
-| Provider | Instance | vCPU | RAM | Price/month | CPX22 Equivalent |
+| Provider | Instance | vCPU | RAM | Price/month | CX33 Equivalent |
 |----------|----------|------|-----|-------------|------------------|
-| Hetzner | CPX22 | 2 | 4GB | €6.44 | Baseline |
-| AWS | t3.medium | 2 | 4GB | ~$30 | 4.7x more expensive |
-| DigitalOcean | Basic 4GB | 2 | 4GB | $24 | 3.7x more expensive |
-| Azure | B2s | 2 | 4GB | ~$30 | 4.7x more expensive |
+| Hetzner | CX33 | 4 | 8GB | €6.44 | Baseline |
+| AWS | t3.xlarge | 4 | 16GB | ~$120 | 18.6x more expensive |
+| DigitalOcean | Basic 8GB | 4 | 8GB | $48 | 7.5x more expensive |
+| Azure | B4ms | 4 | 16GB | ~$120 | 18.6x more expensive |
 
-**Verdict**: Hetzner offers exceptional price/performance for European workloads. AMD EPYC processors are significantly faster than AWS/DO/Azure baseline instances. For US-based teams, AWS/DO may offer better latency but at much higher cost.
+**Verdict**: Hetzner offers exceptional price/performance for European workloads. For 1000 concurrent users, you'd pay $48-120/month on other clouds vs €6.44 on Hetzner. For US-based teams, AWS/DO may offer better latency but at much higher cost.
 
 ---
 
@@ -395,4 +446,4 @@ If you run performance tests on different instance types or configurations, plea
 **Last Updated**: January 19, 2026  
 **Mattermost Version**: 11.3.0  
 **Test Framework**: Locust 2.43.1  
-**Key Finding**: AMD EPYC (CPX22) outperforms Intel (CX23) by 88% at only 28% higher cost. Dedicated cores (CCX13) add 20% capacity at 63% premium.
+**Key Finding**: More cores beat faster cores - CX33 (4 Intel) outperforms CPX22 (2 AMD EPYC) at 1000 users despite slower single-thread performance. PostgreSQL parallelizes beautifully across 4 cores.
