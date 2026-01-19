@@ -64,15 +64,16 @@ terraform apply
 
 ## Performance
 
-Synthetic load tests comparing Hetzner instance types show significant performance differences. **AMD EPYC processors (CPX series) dramatically outperform Intel (CX series)** for Mattermost workloads. See [PERFORMANCE.md](PERFORMANCE.md) for detailed benchmarks.
+Comprehensive load tests reveal **AMD EPYC processors dramatically outperform Intel** for Mattermost workloads. **CPX22 (2 AMD cores)** offers the best price/performance ratio. See [PERFORMANCE.md](PERFORMANCE.md) for detailed benchmarks.
 
-| Instance | CPU Type | Price/mo | Concurrent Users | Median | Status |
-|----------|----------|----------|------------------|--------|--------|
-| **CX23** | Intel (shared) | €5.04 | 400 | 46ms | ⚠️ CPU maxed |
-| **CPX22** | AMD EPYC (shared) | €6.44 | **750** | 35ms | ✅ **Recommended** |
-| CCX13 | AMD EPYC (dedicated) | €10.50 | _Testing_ | _TBD_ | ⏳ |
+| Instance | CPU Type | Cores | Price/mo | Safe Capacity | Median | Value |
+|----------|----------|-------|----------|---------------|--------|-------|
+| **CX23** | Intel (shared) | 2 | €5.04 | 400 users | 46ms | ⭐⭐⭐ |
+| **CPX22** | AMD EPYC (shared) | 2 | €6.44 | **750 users** | **35ms** | ⭐⭐⭐⭐⭐ **Best** |
+| **CCX13** | AMD EPYC (dedicated) | 2 | €10.50 | 900 users | 33ms | ⭐⭐⭐ |
+| **CX33** | Intel (shared) | 4 | €6.44 | _Testing_ | _TBD_ | ⏳ |
 
-**Key Finding**: CPX22 handles **88% more concurrent users** than CX23 at only 28% higher cost, making it the best value option.
+**Key Finding**: CPX22 handles **88% more users** than CX23 at only 28% higher cost. Dedicated cores (CCX13) provide 20% more capacity but cost 63% more—only worth it for guaranteed performance without noisy neighbors.
 
 ## Maintenance Timeline Schedule
 
