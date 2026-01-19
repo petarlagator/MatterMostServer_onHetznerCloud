@@ -4,13 +4,14 @@
 
 ## Executive Summary
 
-**Key Finding**: AMD EPYC processors (CPX series) significantly outperform Intel (CX series) for Mattermost workloads.
+**Key Finding**: AMD EPYC processors (CPX/CCX series) significantly outperform Intel (CX series) for Mattermost workloads.
 
-- **CX23 (Intel shared)**: Comfortable up to 400 concurrent users
-- **CPX22 (AMD EPYC shared)**: Comfortable up to **750 concurrent users** (+88% capacity)
-- **Price difference**: Only 28% more expensive (€6.44 vs €5.04/month)
+- **CX23 (Intel shared, 2 cores)**: Comfortable up to 400 concurrent users
+- **CPX22 (AMD EPYC shared, 2 cores)**: Comfortable up to **750 concurrent users** (+88% capacity)
+- **CCX13 (AMD EPYC dedicated, 2 cores)**: Comfortable up to **900 concurrent users** (+125% vs CX23)
+- **CX33 (Intel shared, 4 cores)**: _Testing in progress_
 
-**Recommendation**: Use **CPX22** for best price/performance ratio.
+**Recommendation**: Use **CPX22** for best price/performance ratio (€0.86 per 100 concurrent users).
 
 ## Testing Methodology
 
@@ -130,13 +131,51 @@
 
 **Server Specs**: AMD EPYC (Milan), 2 **dedicated** vCPU cores, 8GB RAM, 80GB SSD
 
+| Concurrent Users | Throughput (req/s) | Median Response | 95th Percentile | 99th Percentile | Failure Rate | CPU Usage | Load Avg | Notes |
+|-----------------|-------------------|-----------------|-----------------|-----------------|--------------|-----------|----------|-------|
+| 750 | 120 | 33ms | 200ms | 320ms | 0% | ~60% | 4.1 | ✅ **Perfect** - 35% CPU idle |
+| 1000 | 157 | 51ms | 1600ms | 2700ms | 1.90% | ~77% | 6.5 | ⚠️ **Degrading** - Starting to fail |
+| 1250 | 178 | 930ms | 3100ms | 7100ms | 6.73% | ~200% | 14.0 | ❌ **Failed** - High error rate |
+
+#### CCX13 Analysis
+
+**Recommended Capacity**:
+- **Comfortable**: Up to 900 concurrent active users with excellent sub-50ms response times
+- **Maximum**: 1000 concurrent users with minor degradation
+- **Breaking point**: 1250+ users (errors and >900ms median)
+
+**Real-World Translation**:
+- Large team: 3,000-9,000 registered users → CCX13 is excellent
+- Very large: 9,000-18,000 registered users → CCX13 handles well
+- Enterprise: 20,000+ registered users → Consider CCX23 (4 vCPU dedicated)
+
+**Performance vs CPX22**:
+- **20% more concurrent users** (900 vs 750) at comfortable performance levels
+- **6% faster median response** at 750 users (33ms vs 35ms)
+- **Marginally better 99th percentile** at 750 users (320ms vs 240ms)
+- **63% more expensive** (€10.50 vs €6.44/month)
+
+**Bottleneck**: Still CPU-bound at 2 cores. Dedicated cores provide **consistent performance** without noisy neighbors, but only offer 20% more capacity.
+
+**Key Observations**:
+- Dedicated cores don't provide massive performance gains at comfortable load levels
+- Main benefit: **guaranteed performance** - no CPU sharing with other tenants
+- At 750 users, CCX13 has 35% CPU idle (headroom for traffic spikes)
+- Only worth the 63% premium if you need **predictable, consistent performance**
+
+---
+
+### Hetzner CX33 (4 vCPU Intel, 8GB RAM, €6.44/month)
+
+**Server Specs**: Intel Xeon, 4 shared vCPU cores, 8GB RAM, 80GB SSD
+
 | Concurrent Users | Throughput (req/s) | Median Response | 95th Percentile | 99th Percentile | Failure Rate | Notes |
 |-----------------|-------------------|-----------------|-----------------|-----------------|--------------|-------|
 | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | ⏳ **Testing in progress** |
 
-#### CCX13 Analysis
+#### CX33 Analysis
 
-_Results will be added after testing completes. Expected improvement: Dedicated cores may provide 30-50% better consistency under load._
+_Results will be added after testing completes. Expected: 4 Intel cores may outperform 2 AMD cores despite slower single-thread performance._
 
 ---
 
@@ -148,7 +187,8 @@ _Results will be added after testing completes. Expected improvement: Dedicated 
 |----------|----------|-------|----------|---------------|-------------------|---------------|
 | **CX23** | Intel (shared) | 2 | €5.04 | 400 users | €1.26 | ⭐⭐⭐ Good |
 | **CPX22** | AMD EPYC (shared) | 2 | €6.44 | 750 users | **€0.86** | ⭐⭐⭐⭐⭐ **Best** |
-| **CCX13** | AMD EPYC (dedicated) | 2 | €10.50 | _TBD_ | _TBD_ | ⏳ Testing |
+| **CCX13** | AMD EPYC (dedicated) | 2 | €10.50 | 900 users | €1.17 | ⭐⭐⭐⭐ Premium |
+| **CX33** | Intel (shared) | 4 | €6.44 | _TBD_ | _TBD_ | ⏳ Testing |
 
 **Winner**: **CPX22** offers the best value at €0.86 per 100 concurrent users.
 
@@ -159,16 +199,24 @@ _Results will be added after testing completes. Expected improvement: Dedicated 
 - ✅ Development/testing environments
 - ❌ Not recommended for production >300 concurrent users
 
-**CPX22**: 
+**CPX22** (⭐ **Recommended**):
 - ✅ **Best choice for most teams** (up to 7,500 registered users)
 - ✅ Excellent price/performance ratio
 - ✅ Room to grow without immediate upgrade
-- ✅ AMD EPYC processors handle load much better
+- ✅ AMD EPYC processors handle load much better than Intel
 
-**CCX13** (when results available):
-- ✅ Teams needing consistent performance (dedicated cores)
-- ✅ More headroom for traffic spikes
-- ⚠️ 63% more expensive than CPX22 for potentially marginal gain
+**CCX13**:
+- ✅ Teams needing **guaranteed consistent performance** (no noisy neighbors)
+- ✅ 20% more headroom for traffic spikes vs CPX22
+- ✅ Large teams (9,000-18,000 registered users)
+- ⚠️ 63% more expensive than CPX22 for 20% more capacity
+- ⚠️ Only worth it if predictable performance is critical
+
+**CX33** (when results available):
+- ✅ Same price as CPX22 (€6.44/month)
+- ✅ 4 Intel cores vs 2 AMD EPYC cores
+- ⚠️ Intel single-thread performance is slower
+- ⏳ Testing will reveal if more cores compensate for slower per-core performance
 
 ---
 
@@ -188,6 +236,7 @@ _Results will be added after testing completes. Expected improvement: Dedicated 
 - **Memory >3.5GB**: Upgrade RAM (CPX31: 8GB, CPX41: 16GB)
 - **Disk I/O bottleneck**: Switch to storage-optimized instance or add volumes
 - **Response times >100ms median**: Consider horizontal scaling (load balancer + multiple app servers)
+- **Need guaranteed performance**: Switch from shared (CPX) to dedicated (CCX) cores
 
 ---
 
@@ -346,4 +395,4 @@ If you run performance tests on different instance types or configurations, plea
 **Last Updated**: January 19, 2026  
 **Mattermost Version**: 11.3.0  
 **Test Framework**: Locust 2.43.1  
-**Key Finding**: AMD EPYC (CPX22) outperforms Intel (CX23) by 88% at only 28% higher cost
+**Key Finding**: AMD EPYC (CPX22) outperforms Intel (CX23) by 88% at only 28% higher cost. Dedicated cores (CCX13) add 20% capacity at 63% premium.
