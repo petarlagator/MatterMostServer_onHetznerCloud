@@ -206,10 +206,13 @@ write_files:
 
       notif:
         mail:
-          # Use the local Postfix relay already configured on the host.
-          host: localhost
-          port: 25
+          # Direct SMTP connection (bypasses host Postfix for better container networking)
+          host: ${smtp_server}
+          port: ${smtp_port}
           ssl: false
+          insecureSkipVerify: false
+          username: ${smtp_username}
+          password: ${smtp_password}
           from: ${smtp_username}
           to:
             - ${sysadmin_email}
@@ -269,6 +272,11 @@ write_files:
           image: postgres:15-alpine
           container_name: mattermost-db
           restart: unless-stopped
+          labels:
+            - "diun.enable=true"
+            - "diun.watch_repo=true"
+            - "diun.max_tags=5"
+            - "diun.include_tags=^\\d+-alpine$"
           environment:
             - POSTGRES_USER=${db_user}
             - POSTGRES_PASSWORD=${db_password}
