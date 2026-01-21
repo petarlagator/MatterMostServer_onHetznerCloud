@@ -29,6 +29,7 @@ db_name             = "mattermost"
 storage_box_host     = "u123456.your-storagebox.de"
 storage_box_user     = "u123456"
 storage_box_password = "CHANGE_ME_STORAGEBOX"
+storage_box_backup_dir = "mattermost-backups"
 
 # Your cloudflare account API key and DNS zone ID to which you will bind this server
 enable_cloudflare     = true
