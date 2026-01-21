@@ -56,6 +56,12 @@ variable "storage_box_password" {
   sensitive = true
 }
 
+variable "storage_box_backup_dir" {
+  type        = string
+  description = "Subdirectory name on storage box for this Mattermost instance backups"
+  default     = "mattermost-backups"
+}
+
 variable "enable_cloudflare" {
   type    = bool
   default = true

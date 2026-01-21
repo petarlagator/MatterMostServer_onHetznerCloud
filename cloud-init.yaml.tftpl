@@ -230,7 +230,7 @@ write_files:
             - /mattermost/MMserver/plugins:/mattermost/plugins:rw
             - /mattermost/MMserver/client_plugins:/mattermost/client/plugins:rw
             - /mattermost/MMserver/bleve-indexes:/mattermost/bleve-indexes:rw
-            - /backups/MMserver:/mattermost/backup:rw
+            - /backups/${storage_box_backup_dir}/MMserver:/mattermost/backup:rw
 
         db:
           image: postgres:15-alpine
@@ -243,7 +243,7 @@ write_files:
             - TZ=Europe/Podgorica
           volumes:
             - /mattermost/PgSQL/data:/var/lib/postgresql/data:rw
-            - /backups/PgSQL:/backups:rw
+            - /backups/${storage_box_backup_dir}/PgSQL:/backups:rw
 
         web:
           image: nginx:alpine
@@ -289,14 +289,14 @@ write_files:
   - path: /etc/cron.d/mattermost-backups
     permissions: '0644'
     content: |
-      # Daily DB dump at 02:30 to /backups/PgSQL
-      30 2 * * * root docker exec -t mattermost-db pg_dump -U ${db_user} ${db_name} | gzip > /backups/PgSQL/mattermost-$(date +\%F).sql.gz
+      # Daily DB dump at 02:30 to /backups/${storage_box_backup_dir}/PgSQL
+      30 2 * * * root docker exec -t mattermost-db pg_dump -U ${db_user} ${db_name} | gzip > /backups/${storage_box_backup_dir}/PgSQL/mattermost-$(date +\%F).sql.gz
       # Prune PG dumps older than 65 days
-      15 3 * * * root find /backups/PgSQL -type f -name 'mattermost-*.sql.gz' -mtime +65 -delete
+      15 3 * * * root find /backups/${storage_box_backup_dir}/PgSQL -type f -name 'mattermost-*.sql.gz' -mtime +65 -delete
       # Bi-weekly (every 14 days) tar of /mattermost/MMserver at 03:10
-      10 3 */14 * * root tar czf /backups/MMserver/mm-files-$(date +\%F).tar.gz -C /mattermost/MMserver .
+      10 3 */14 * * root tar czf /backups/${storage_box_backup_dir}/MMserver/mm-files-$(date +\%F).tar.gz -C /mattermost/MMserver .
       # Prune MM tars older than 30 days
-      20 3 * * * root find /backups/MMserver -type f -name 'mm-files-*.tar.gz' -mtime +30 -delete
+      20 3 * * * root find /backups/${storage_box_backup_dir}/MMserver -type f -name 'mm-files-*.tar.gz' -mtime +30 -delete
 
 runcmd:
   - mkdir -p /mattermost/MMserver/{config,data,logs,plugins,client_plugins,bleve-indexes}
@@ -311,7 +311,8 @@ runcmd:
   - [ bash, -c, "apt-get install -y cifs-utils" ]
   - [ bash, -c, "echo '//${storage_box_host}/backup /backups cifs username=${storage_box_user},password=${storage_box_password},vers=3.0,_netdev,x-systemd.automount 0 0' >> /etc/fstab" ]
   - [ bash, -c, "mount -a || true" ]
-  - [ bash, -c, "mkdir -p /backups/MMserver /backups/PgSQL" ]
+  - [ bash, -c, "mkdir -p /backups/${storage_box_backup_dir}/MMserver" ]
+  - [ bash, -c, "mkdir -p /backups/${storage_box_backup_dir}/PgSQL" ]
   - [ bash, -c, "curl -fsSL https://developers.cloudflare.com/ssl/static/authenticated_origin_pull_ca.pem -o /mattermost/NGINX/cert/cloudflare-origin-pull-ca.pem" ]
   - [ bash, -c, "postmap /etc/postfix/sasl_passwd" ]
   - [ bash, -c, "systemctl restart postfix" ]
