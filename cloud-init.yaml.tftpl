@@ -14,9 +14,6 @@ packages:
   - postfix
   - libsasl2-modules
   - mailutils
-  - python3
-  - python3-pip
-  - python3-requests
 
 write_files:
   - path: /etc/ssh/sshd_config.d/custom_port.conf
@@ -316,46 +313,6 @@ write_files:
       # Prune MM tars older than 30 days
       20 3 * * * root find /backups/${storage_box_backup_dir}/MMserver -type f -name 'mm-files-*.tar.gz' -mtime +30 -delete
 
-  - path: /opt/docker-version-monitor/monitor.py
-    permissions: '0755'
-    content: |
-      ${docker_monitor_script}
-
-  - path: /opt/docker-version-monitor/config.json
-    permissions: '0600'
-    content: |
-      {
-        "smtp": {
-          "host": "${smtp_server}",
-          "port": ${smtp_port},
-          "username": "${smtp_username}",
-          "password": "${smtp_password}",
-          "from_address": "${feedback_email}",
-          "use_tls": true
-        },
-        "notification_email": "${sysadmin_email}",
-        "state_file": "/var/lib/docker-version-monitor/state.json",
-        "images": [
-          {
-            "name": "postgres",
-            "current_version": "14-alpine"
-          },
-          {
-            "name": "mattermost/mattermost-team-edition",
-            "current_version": "9.11"
-          },
-          {
-            "name": "nginx",
-            "current_version": "alpine"
-          }
-        ]
-      }
-
-  - path: /etc/cron.d/docker-version-monitor
-    permissions: '0644'
-    content: |
-      # Docker Major Version Monitor - Runs on the 15th of each month at 3:00 AM
-      0 3 15 * * root /usr/bin/python3 /opt/docker-version-monitor/monitor.py >> /var/log/docker-version-monitor.log 2>&1
 
 runcmd:
   - mkdir -p /mattermost/MMserver/{config,data,logs,plugins,client_plugins,bleve-indexes}
@@ -382,8 +339,4 @@ runcmd:
   - [ bash, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer" ]
   - [ bash, -c, "systemctl restart sshd" ]
   - [ bash, -c, "chmod -R 755 /mattermost" ]
-  - [ bash, -c, "mkdir -p /var/lib/docker-version-monitor" ]
-  - [ bash, -c, "mkdir -p /opt/docker-version-monitor" ]
-  - [ bash, -c, "chmod +x /opt/docker-version-monitor/monitor.py" ]
-  - [ bash, -c, "pip3 install requests" ]
   - [ bash, -c, "nohup bash -c 'sleep 30 && reboot' &" ]
