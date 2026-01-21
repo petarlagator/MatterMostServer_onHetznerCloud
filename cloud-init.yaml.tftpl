@@ -271,11 +271,23 @@ write_files:
             - "127.0.0.1:9443:9443"
 
         watchtower:
-          image: containrrr/watchtower:latest
+          image: containrrr/watchtower:1.7.1
           container_name: watchtower
           restart: unless-stopped
           environment:
             - TZ=Europe/Podgorica
+            - DOCKER_API_VERSION=1.44
+            - WATCHTOWER_NOTIFICATIONS=email
+            - WATCHTOWER_NOTIFICATION_EMAIL_FROM=${smtp_username}
+            - WATCHTOWER_NOTIFICATION_EMAIL_TO=${sysadmin_email}
+            - WATCHTOWER_NOTIFICATION_EMAIL_SERVER=${smtp_server}
+            - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PORT=${smtp_port}
+            - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_USER=${smtp_username}
+            - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PASSWORD=${smtp_password}
+            - WATCHTOWER_NOTIFICATION_EMAIL_DELAY=2
+            - WATCHTOWER_NOTIFICATION_EMAIL_SUBJECTTAG=[Mattermost]
+            - WATCHTOWER_HTTP_API_UPDATE=true
+            - WATCHTOWER_HTTP_API_TOKEN=${watchtower_api_token}
           volumes:
             - /var/run/docker.sock:/var/run/docker.sock
           ports:
@@ -285,6 +297,7 @@ write_files:
             - "0 0 3 * * *"
             - --cleanup
             - --rolling-restart
+            - --http-api-update
 
   - path: /etc/cron.d/mattermost-backups
     permissions: '0644'
