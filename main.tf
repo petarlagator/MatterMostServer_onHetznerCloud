@@ -96,15 +96,16 @@ data "template_file" "cloud_init" {
   template = file("${path.module}/cloud-init.yaml.tftpl")
 
   vars = {
-    domain               = var.domain
-    db_user              = var.db_user
-    db_password          = var.db_password
-    db_name              = var.db_name
-    storage_box_host     = var.storage_box_host
-    storage_box_user     = var.storage_box_user
-    storage_box_password = var.storage_box_password
-    watchtower_api_token = var.watchtower_api_token
-    ssh_port             = var.ssh_port
+    domain                 = var.domain
+    db_user                = var.db_user
+    db_password            = var.db_password
+    db_name                = var.db_name
+    storage_box_host       = var.storage_box_host
+    storage_box_user       = var.storage_box_user
+    storage_box_password   = var.storage_box_password
+    storage_box_backup_dir = var.storage_box_backup_dir
+    watchtower_api_token   = var.watchtower_api_token
+    ssh_port               = var.ssh_port
 
     # SMTP Configuration (for both Mattermost and OS notifications)
     smtp_username            = var.smtp_username
