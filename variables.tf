@@ -190,9 +190,3 @@ variable "sysadmin_email" {
   description = "System administrator email address for OS security update notifications (failures and errors)"
   default     = ""
 }
-
-variable "storage_box_backup_dir" {
-  type        = string
-  description = "Subdirectory name on storage box for this Mattermost instance backups"
-  default     = "mattermost-backups"
-}
