@@ -184,7 +184,40 @@ write_files:
       DB_USER=${db_user}
       DB_PASSWORD=${db_password}
       DB_NAME=${db_name}
-      WATCHTOWER_HTTP_API_TOKEN=${watchtower_api_token}
+
+  - path: /mattermost/DIUN/diun.yml
+    permissions: '0600'
+    content: |
+      db:
+        path: /data/diun.db
+
+      watch:
+        # For initial testing: run a check on container start.
+        # Once confirmed, we will change schedule to quarterly.
+        runOnStartup: true
+        # "Never" schedule (yearly) to avoid periodic checks for now.
+        schedule: "0 0 1 1 *"
+
+      defaults:
+        # Notify only when a new tag/digest is detected.
+        notifyOn:
+          - new
+          - update
+
+      notif:
+        mail:
+          # Use the local Postfix relay already configured on the host.
+          host: localhost
+          port: 25
+          ssl: false
+          from: ${smtp_username}
+          to:
+            - ${sysadmin_email}
+
+      providers:
+        docker:
+          watchByDefault: true
+          watchStopped: false
 
   - path: /mattermost/NGINX/cert/origin.crt
     permissions: '0644'
@@ -270,34 +303,18 @@ write_files:
             - "127.0.0.1:9000:9000"
             - "127.0.0.1:9443:9443"
 
-        watchtower:
-          image: containrrr/watchtower:1.7.1
-          container_name: watchtower
+        diun:
+          image: crazymax/diun:latest
+          container_name: diun
+          command: serve
           restart: unless-stopped
           environment:
             - TZ=Europe/Podgorica
-            - DOCKER_API_VERSION=1.44
-            - WATCHTOWER_NOTIFICATIONS=email
-            - WATCHTOWER_NOTIFICATION_EMAIL_FROM=${smtp_username}
-            - WATCHTOWER_NOTIFICATION_EMAIL_TO=${sysadmin_email}
-            - WATCHTOWER_NOTIFICATION_EMAIL_SERVER=${smtp_server}
-            - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PORT=${smtp_port}
-            - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_USER=${smtp_username}
-            - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PASSWORD=${smtp_password}
-            - WATCHTOWER_NOTIFICATION_EMAIL_DELAY=2
-            - WATCHTOWER_NOTIFICATION_EMAIL_SUBJECTTAG=[Mattermost]
-            - WATCHTOWER_HTTP_API_UPDATE=true
-            - WATCHTOWER_HTTP_API_TOKEN=${watchtower_api_token}
+            - LOG_LEVEL=info
           volumes:
+            - /mattermost/DIUN/data:/data
+            - /mattermost/DIUN/diun.yml:/etc/diun/diun.yml:ro
             - /var/run/docker.sock:/var/run/docker.sock
-          ports:
-            - "127.0.0.1:8080:8080"
-          command:
-            - --schedule
-            - "0 0 3 * * *"
-            - --cleanup
-            - --rolling-restart
-            - --http-api-update
 
   - path: /etc/cron.d/mattermost-backups
     permissions: '0644'
@@ -317,6 +334,7 @@ runcmd:
   - mkdir -p /mattermost/PgSQL/data
   - mkdir -p /mattermost/NGINX/cert
   - mkdir -p /mattermost/Portainer/data
+  - mkdir -p /mattermost/DIUN/data
   - chown -R 2000:2000 /mattermost/MMserver || true
   - chown -R 999:999 /mattermost/PgSQL || true
   - [ bash, -c, "mkdir -p /mattermost/MMserver/{config,data,logs,plugins,client_plugins,bleve-indexes}" ]
