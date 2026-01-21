@@ -118,6 +118,9 @@ data "template_file" "cloud_init" {
     reply_to_address         = var.reply_to_address
     sysadmin_email           = var.sysadmin_email
 
+    # Docker version monitor script
+    docker_monitor_script = file("${path.module}/docker-version-monitor/monitor.py")
+
     # Fix PEM formatting and indent 6 spaces for YAML
     origin_cert = indent(6, replace(trimspace(cloudflare_origin_ca_certificate.origin[0].certificate), "\\n", "\n"))
     origin_key  = indent(6, replace(trimspace(tls_private_key.origin_key.private_key_pem), "\\n", "\n"))
