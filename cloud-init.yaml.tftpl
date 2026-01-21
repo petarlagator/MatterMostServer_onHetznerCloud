@@ -202,8 +202,7 @@ write_files:
       version: "3.8"
       services:
         mattermost:
-          # Using older version for testing update notifications (current latest is 10.x)
-          image: mattermost/mattermost-team-edition:9.11
+          image: mattermost/mattermost-team-edition:latest
           container_name: mattermost
           restart: unless-stopped
           user: "2000:2000"
@@ -234,8 +233,7 @@ write_files:
             - /backups/${storage_box_backup_dir}/MMserver:/mattermost/backup:rw
 
         db:
-          # Using PostgreSQL 14 (current is 16, so this is 2 versions behind for testing)
-          image: postgres:14-alpine
+          image: postgres:15-alpine
           container_name: mattermost-db
           restart: unless-stopped
           environment:
