@@ -190,3 +190,16 @@ variable "sysadmin_email" {
   description = "System administrator email address for OS security update notifications (failures and errors)"
   default     = ""
 }
+
+# Block Storage Volume Variables
+variable "volume_name" {
+  type        = string
+  description = "Name of the Hetzner block storage volume for persistent Mattermost data"
+  default     = "mattermost-data-volume"
+}
+
+variable "volume_size" {
+  type        = number
+  description = "Size of the block storage volume in GB"
+  default     = 30
+}
