@@ -184,201 +184,6 @@ write_files:
       # Disable the default systemd timer and use cron for precise scheduling
       0 4 * * 2 root /usr/bin/unattended-upgrade -v
 
-  - path: /mattermost/NGINX/nginx.conf
-    permissions: '0644'
-    content: |
-      upstream mattermost {
-        server mattermost:8065;
-        keepalive 32;
-      }
-      server {
-        listen 80;
-        server_name ${domain};
-        return 301 https://$host$request_uri;
-      }
-      server {
-        listen 443 ssl http2;
-        server_name ${domain};
-
-        ssl_certificate     /etc/nginx/certs/origin.crt;
-        ssl_certificate_key /etc/nginx/certs/origin.key;
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers HIGH:!aNULL:!MD5;
-        ssl_prefer_server_ciphers on;
-        add_header Strict-Transport-Security "max-age=31536000" always;
-
-        # Authenticated Origin Pulls (require CF client cert)
-        ssl_client_certificate /etc/nginx/certs/cloudflare-origin-pull-ca.pem;
-        ssl_verify_client on;
-
-        client_max_body_size 100M;
-        proxy_read_timeout 600s;
-        proxy_send_timeout 300s;
-        proxy_connect_timeout 90s;
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Frame-Options SAMEORIGIN;
-
-        location ~ /api/v[0-9]+/(users/)?websocket$ {
-          proxy_set_header Upgrade $http_upgrade;
-          proxy_set_header Connection "upgrade";
-          proxy_set_header Host $host;
-          proxy_pass http://mattermost;
-        }
-        location / {
-          proxy_pass http://mattermost;
-        }
-      }
-
-  - path: /mattermost/.env
-    permissions: '0600'
-    content: |
-      DB_USER=${db_user}
-      DB_PASSWORD=${db_password}
-      DB_NAME=${db_name}
-
-  - path: /mattermost/DIUN/diun.yml
-    permissions: '0600'
-    content: |
-      db:
-        path: /data/diun.db
-
-      watch:
-        # Run a check on container start
-        runOnStartup: true
-        # Check every 2 months on the 15th at midnight
-        schedule: "0 0 15 */2 *"
-
-      defaults:
-        # Notify only when a new tag/digest is detected.
-        notifyOn:
-          - new
-          - update
-
-      notif:
-        mail:
-          # Direct SMTP connection (bypasses host Postfix for better container networking)
-          host: ${smtp_server}
-          port: ${smtp_port}
-          ssl: false
-          insecureSkipVerify: false
-          username: ${smtp_username}
-          password: ${smtp_password}
-          from: ${smtp_username}
-          to:
-            - ${sysadmin_email}
-
-      providers:
-        docker:
-          watchByDefault: true
-          watchStopped: false
-
-  - path: /mattermost/NGINX/cert/origin.crt
-    permissions: '0644'
-    content: |
-      ${origin_cert}
-
-  - path: /mattermost/NGINX/cert/origin.key
-    permissions: '0600'
-    content: |
-      ${origin_key}
-
-  - path: /mattermost/docker-compose.yml
-    permissions: '0644'
-    content: |
-      version: "3.8"
-      services:
-        mattermost:
-          image: mattermost/mattermost-team-edition:latest
-          container_name: mattermost
-          restart: unless-stopped
-          user: "2000:2000"
-          depends_on: [ db ]
-          environment:
-            - TZ=Europe/Podgorica
-            - MM_SQLSETTINGS_DRIVERNAME=postgres
-            - MM_SQLSETTINGS_DATASOURCE=postgres://${db_user}:${db_password}@db:5432/${db_name}?sslmode=disable&connect_timeout=10
-            - MM_SERVICESETTINGS_SITEURL=https://${domain}
-            - MM_BLEVESETTINGS_INDEXDIR=/mattermost/bleve-indexes
-            - MM_EMAILSETTINGS_SENDPUSHNOTIFICATIONS=true
-            - MM_EMAILSETTINGS_PUSHNOTIFICATIONSERVER=https://push-test.mattermost.com
-            - MM_EMAILSETTINGS_SMTPUSERNAME=${smtp_username}
-            - MM_EMAILSETTINGS_SMTPPASSWORD=${smtp_password}
-            - MM_EMAILSETTINGS_SMTPSERVER=${smtp_server}
-            - MM_EMAILSETTINGS_SMTPPORT=${smtp_port}
-            - MM_EMAILSETTINGS_CONNECTIONSECURITY=${smtp_connection_security}
-            - MM_EMAILSETTINGS_ENABLESMTPAUTH=${enable_smtp_auth}
-            - MM_EMAILSETTINGS_FEEDBACKEMAIL=${feedback_email}
-            - MM_EMAILSETTINGS_REPLYTOADDRESS=${reply_to_address}
-          volumes:
-            - /mattermost/MMserver/config:/mattermost/config:rw
-            - /mattermost/MMserver/data:/mattermost/data:rw
-            - /mattermost/MMserver/logs:/mattermost/logs:rw
-            - /mattermost/MMserver/plugins:/mattermost/plugins:rw
-            - /mattermost/MMserver/client_plugins:/mattermost/client/plugins:rw
-            - /mattermost/MMserver/bleve-indexes:/mattermost/bleve-indexes:rw
-            - /backups/${storage_box_backup_dir}/MMserver:/mattermost/backup:rw
-
-        db:
-          image: postgres:15-alpine
-          container_name: mattermost-db
-          restart: unless-stopped
-          labels:
-            - "diun.enable=true"
-            - "diun.watch_repo=true"
-            - "diun.max_tags=5"
-            - "diun.include_tags=^\\d+-alpine$"
-          environment:
-            - POSTGRES_USER=${db_user}
-            - POSTGRES_PASSWORD=${db_password}
-            - POSTGRES_DB=${db_name}
-            - TZ=Europe/Podgorica
-          volumes:
-            - /mattermost/PgSQL/data:/var/lib/postgresql/data:rw
-            - /backups/${storage_box_backup_dir}/PgSQL:/backups:rw
-
-        web:
-          image: nginx:alpine
-          container_name: mattermost-nginx
-          restart: unless-stopped
-          depends_on: [ mattermost ]
-          ports:
-            - "80:80"
-            - "443:443"
-          volumes:
-            - /mattermost/NGINX/nginx.conf:/etc/nginx/conf.d/mattermost.conf:ro
-            - /mattermost/NGINX/cert:/etc/nginx/certs:ro
-
-        portainer:
-          image: portainer/portainer-ce:latest
-          container_name: portainer
-          restart: unless-stopped
-          security_opt:
-            - no-new-privileges:true
-          volumes:
-            - /var/run/docker.sock:/var/run/docker.sock
-            - /mattermost/Portainer/data:/data
-          ports:
-            - "127.0.0.1:9000:9000"
-            - "127.0.0.1:9443:9443"
-
-        diun:
-          image: crazymax/diun:latest
-          container_name: diun
-          command: serve
-          restart: unless-stopped
-          environment:
-            - TZ=Europe/Podgorica
-            - LOG_LEVEL=info
-          volumes:
-            - /mattermost/DIUN/data:/data
-            - /mattermost/DIUN/diun.yml:/etc/diun/diun.yml:ro
-            - /var/run/docker.sock:/var/run/docker.sock
-
   - path: /etc/cron.d/mattermost-backups
     permissions: '0644'
     content: |
@@ -396,7 +201,7 @@ runcmd:
   # Install Docker first
   - [ bash, -c, "/root/install_docker.sh" ]
   
-  # Setup and mount the block storage volume
+  # Setup and mount the block storage volume FIRST
   - [ bash, -c, "/root/setup_volume.sh" ]
   
   # Create Mattermost directory structure on the mounted volume
@@ -405,6 +210,210 @@ runcmd:
   - [ bash, -c, "mkdir -p /mattermost/NGINX/cert" ]
   - [ bash, -c, "mkdir -p /mattermost/Portainer/data" ]
   - [ bash, -c, "mkdir -p /mattermost/DIUN/data" ]
+  
+  # NOW create the config files on the mounted volume
+  - [ bash, -c, "cat > /mattermost/NGINX/nginx.conf << 'NGINX_EOF'
+upstream mattermost {
+  server mattermost:8065;
+  keepalive 32;
+}
+server {
+  listen 80;
+  server_name ${domain};
+  return 301 https://\$host\$request_uri;
+}
+server {
+  listen 443 ssl http2;
+  server_name ${domain};
+
+  ssl_certificate     /etc/nginx/certs/origin.crt;
+  ssl_certificate_key /etc/nginx/certs/origin.key;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_ciphers HIGH:!aNULL:!MD5;
+  ssl_prefer_server_ciphers on;
+  add_header Strict-Transport-Security \"max-age=31536000\" always;
+
+  # Authenticated Origin Pulls (require CF client cert)
+  ssl_client_certificate /etc/nginx/certs/cloudflare-origin-pull-ca.pem;
+  ssl_verify_client on;
+
+  client_max_body_size 100M;
+  proxy_read_timeout 600s;
+  proxy_send_timeout 300s;
+  proxy_connect_timeout 90s;
+  proxy_http_version 1.1;
+  proxy_set_header Connection \"\";
+  proxy_set_header Host \$host;
+  proxy_set_header X-Real-IP \$remote_addr;
+  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto \$scheme;
+  proxy_set_header X-Frame-Options SAMEORIGIN;
+
+  location ~ /api/v[0-9]+/(users/)?websocket\$ {
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection \"upgrade\";
+    proxy_set_header Host \$host;
+    proxy_pass http://mattermost;
+  }
+  location / {
+    proxy_pass http://mattermost;
+  }
+}
+NGINX_EOF
+" ]
+  
+  - [ bash, -c, "cat > /mattermost/.env << 'ENV_EOF'
+DB_USER=${db_user}
+DB_PASSWORD=${db_password}
+DB_NAME=${db_name}
+ENV_EOF
+" ]
+  
+  - [ bash, -c, "cat > /mattermost/DIUN/diun.yml << 'DIUN_EOF'
+db:
+  path: /data/diun.db
+
+watch:
+  # Run a check on container start
+  runOnStartup: true
+  # Check every 2 months on the 15th at midnight
+  schedule: \"0 0 15 */2 *\"
+
+defaults:
+  # Notify only when a new tag/digest is detected.
+  notifyOn:
+    - new
+    - update
+
+notif:
+  mail:
+    # Direct SMTP connection (bypasses host Postfix for better container networking)
+    host: ${smtp_server}
+    port: ${smtp_port}
+    ssl: false
+    insecureSkipVerify: false
+    username: ${smtp_username}
+    password: ${smtp_password}
+    from: ${smtp_username}
+    to:
+      - ${sysadmin_email}
+
+providers:
+  docker:
+    watchByDefault: true
+    watchStopped: false
+DIUN_EOF
+" ]
+  
+  - [ bash, -c, "cat > /mattermost/NGINX/cert/origin.crt << 'CERT_EOF'
+${origin_cert}
+CERT_EOF
+" ]
+  
+  - [ bash, -c, "cat > /mattermost/NGINX/cert/origin.key << 'KEY_EOF'
+${origin_key}
+KEY_EOF
+" ]
+  
+  - [ bash, -c, "cat > /mattermost/docker-compose.yml << 'COMPOSE_EOF'
+version: \"3.8\"
+services:
+  mattermost:
+    image: mattermost/mattermost-team-edition:latest
+    container_name: mattermost
+    restart: unless-stopped
+    user: \"2000:2000\"
+    depends_on: [ db ]
+    environment:
+      - TZ=Europe/Podgorica
+      - MM_SQLSETTINGS_DRIVERNAME=postgres
+      - MM_SQLSETTINGS_DATASOURCE=postgres://${db_user}:${db_password}@db:5432/${db_name}?sslmode=disable&connect_timeout=10
+      - MM_SERVICESETTINGS_SITEURL=https://${domain}
+      - MM_BLEVESETTINGS_INDEXDIR=/mattermost/bleve-indexes
+      - MM_EMAILSETTINGS_SENDPUSHNOTIFICATIONS=true
+      - MM_EMAILSETTINGS_PUSHNOTIFICATIONSERVER=https://push-test.mattermost.com
+      - MM_EMAILSETTINGS_SMTPUSERNAME=${smtp_username}
+      - MM_EMAILSETTINGS_SMTPPASSWORD=${smtp_password}
+      - MM_EMAILSETTINGS_SMTPSERVER=${smtp_server}
+      - MM_EMAILSETTINGS_SMTPPORT=${smtp_port}
+      - MM_EMAILSETTINGS_CONNECTIONSECURITY=${smtp_connection_security}
+      - MM_EMAILSETTINGS_ENABLESMTPAUTH=${enable_smtp_auth}
+      - MM_EMAILSETTINGS_FEEDBACKEMAIL=${feedback_email}
+      - MM_EMAILSETTINGS_REPLYTOADDRESS=${reply_to_address}
+    volumes:
+      - /mattermost/MMserver/config:/mattermost/config:rw
+      - /mattermost/MMserver/data:/mattermost/data:rw
+      - /mattermost/MMserver/logs:/mattermost/logs:rw
+      - /mattermost/MMserver/plugins:/mattermost/plugins:rw
+      - /mattermost/MMserver/client_plugins:/mattermost/client/plugins:rw
+      - /mattermost/MMserver/bleve-indexes:/mattermost/bleve-indexes:rw
+      - /backups/${storage_box_backup_dir}/MMserver:/mattermost/backup:rw
+
+  db:
+    image: postgres:15-alpine
+    container_name: mattermost-db
+    restart: unless-stopped
+    labels:
+      - \"diun.enable=true\"
+      - \"diun.watch_repo=true\"
+      - \"diun.max_tags=5\"
+      - \"diun.include_tags=^\\\\d+-alpine\$\"
+    environment:
+      - POSTGRES_USER=${db_user}
+      - POSTGRES_PASSWORD=${db_password}
+      - POSTGRES_DB=${db_name}
+      - TZ=Europe/Podgorica
+    volumes:
+      - /mattermost/PgSQL/data:/var/lib/postgresql/data:rw
+      - /backups/${storage_box_backup_dir}/PgSQL:/backups:rw
+
+  web:
+    image: nginx:alpine
+    container_name: mattermost-nginx
+    restart: unless-stopped
+    depends_on: [ mattermost ]
+    ports:
+      - \"80:80\"
+      - \"443:443\"
+    volumes:
+      - /mattermost/NGINX/nginx.conf:/etc/nginx/conf.d/mattermost.conf:ro
+      - /mattermost/NGINX/cert:/etc/nginx/certs:ro
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /mattermost/Portainer/data:/data
+    ports:
+      - \"127.0.0.1:9000:9000\"
+      - \"127.0.0.1:9443:9443\"
+
+  diun:
+    image: crazymax/diun:latest
+    container_name: diun
+    command: serve
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Podgorica
+      - LOG_LEVEL=info
+    volumes:
+      - /mattermost/DIUN/data:/data
+      - /mattermost/DIUN/diun.yml:/etc/diun/diun.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+COMPOSE_EOF
+" ]
+  
+  # Set proper permissions on sensitive files
+  - [ bash, -c, "chmod 600 /mattermost/.env" ]
+  - [ bash, -c, "chmod 600 /mattermost/DIUN/diun.yml" ]
+  - [ bash, -c, "chmod 600 /mattermost/NGINX/cert/origin.key" ]
+  - [ bash, -c, "chmod 644 /mattermost/NGINX/cert/origin.crt" ]
+  - [ bash, -c, "chmod 644 /mattermost/NGINX/nginx.conf" ]
+  - [ bash, -c, "chmod 644 /mattermost/docker-compose.yml" ]
   
   # Set proper ownership
   - [ bash, -c, "chown -R 2000:2000 /mattermost/MMserver || true" ]
