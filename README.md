@@ -2,7 +2,7 @@
 
 Deploy a production-ready Mattermost stack on **Hetzner Cloud** using **Terraform** and **Docker**, with Cloudflare in front for TLS and optional extra hardening.
 
-This project provisions a Hetzner VM, installs Docker, and starts Mattermost + PostgreSQL + NGINX (reverse proxy) plus optional operational tooling (Portainer, Watchtower) and basic backups.
+This project provisions a Hetzner VM, installs Docker, and starts Mattermost + PostgreSQL + NGINX (reverse proxy) plus optional operational tooling (Portainer, DIUN) and basic backups.
 
 ## What this deploys
 
@@ -12,7 +12,7 @@ This project provisions a Hetzner VM, installs Docker, and starts Mattermost + P
   - PostgreSQL
   - NGINX reverse proxy (ports **80/443** on the host)
   - Portainer (local access)
-  - Watchtower (automatic container updates)
+  - DIUN (Docker Image Update Notifier)
 - **Cloudflare integration**:
   - Cloudflare Origin CA certificate for origin TLS
   - Cloudflare Authenticated Origin Pulls (AOP) so NGINX only serves HTTPS when requests come via Cloudflare (prevents direct-IP bypass)
@@ -21,6 +21,7 @@ This project provisions a Hetzner VM, installs Docker, and starts Mattermost + P
   - Email notifications on security update failures
   - Daily database backups with retention
   - Periodic Mattermost files/config archive with retention
+  - Bi-monthly container image update notifications via email
 - **SMTP email configuration**:
   - Email settings configured via Terraform variables
   - Shared SMTP configuration for both Mattermost and OS notifications
@@ -69,7 +70,7 @@ Comprehensive load tests reveal **CPX32 (4 AMD EPYC cores) is the ULTIMATE WINNE
 ### Value Analysis
 
 | Instance | Peak Capacity | Price | Cost per 100 Users | Value Rating |
-|----------|---------------|-------|-------------------|--------------|
+|----------|---------------|-------|-------------------|------------|
 | CX23 | 400 | €3.00 | €0.75 | ⭐⭐⭐ |
 | CPX22 | 750 | €6.00 | €0.80 | ⭐⭐⭐⭐⭐ Best Budget |
 | CX33 | 1000 | €5.00 | **€0.50** | ⭐⭐⭐⭐⭐ Best Value |
@@ -85,12 +86,12 @@ The server is configured with automated maintenance tasks that run at scheduled 
 | Time | Day | Task | Description |
 |------|-----|------|-------------|
 | 02:30 AM | Daily | Database Backup | PostgreSQL dump of Mattermost database (65-day retention) |
-| 03:00 AM | Daily | Container Updates Check | Watchtower checks for new container images |
 | 03:10 AM | Every 14 days | Files Backup | Tar archive of Mattermost data, config, plugins (30-day retention) |
 | 03:15 AM | Daily | Backup Cleanup | Remove database backups older than 65 days |
 | 03:20 AM | Daily | Backup Cleanup | Remove file archives older than 30 days |
 | **04:00 AM** | **Tuesday** | **Security Updates** | Automatic installation of Ubuntu security patches |
 | **04:30 AM** | **Tuesday** | **Auto-Reboot** | System reboot if required by security updates |
+| **12:00 AM** | **15th (bi-monthly)** | **Container Update Check** | DIUN checks for new Docker image versions and sends email notification |
 
 ### Maintenance Notes
 
@@ -99,6 +100,8 @@ The server is configured with automated maintenance tasks that run at scheduled 
 - **Automatic reboot occurs if needed** (e.g., kernel updates) at 4:30 AM
 - **Backups complete before updates** ensuring fresh backups exist before any system changes
 - **Email notifications sent on failures** to the configured sysadmin email address
+- **Container update notifications** sent bi-monthly (15th of January, March, May, July, September, November) when newer Docker images are available
+- **DIUN monitors all containers** and reports when postgres, nginx, mattermost, portainer, or any other service has a newer version available
 - **All maintenance activities are logged** to syslog for audit purposes
 - The Tuesday 4:00 AM time slot is chosen to minimize impact on users
 
@@ -115,6 +118,17 @@ To change the security update schedule, modify the cron entry in `cloud-init.yam
 # 0 3 * * 0 root /usr/bin/unattended-upgrade -v
 ```
 
+To change DIUN's check frequency, edit the `schedule` parameter in `/mattermost/DIUN/diun.yml`:
+```yaml
+watch:
+  runOnStartup: true
+  schedule: "0 0 15 */2 *"  # Current: 15th of every 2 months at midnight
+  # Examples:
+  # Monthly: "0 0 1 * *"
+  # Quarterly: "0 0 1 */3 *"
+  # Weekly: "0 0 * * 0"
+```
+
 ## Docker Server Directory Mappings
 
 - `/mattermost/MMserver/config` – Mattermost config file (config.json) will be stored here
@@ -124,6 +138,7 @@ To change the security update schedule, modify the cron entry in `cloud-init.yam
 - `/mattermost/MMserver/bleve-indexes` – Search index data (if using Bleve for search)
 - `/mattermost/PgSQL/data` – PostgreSQL database files
 - `/mattermost/NGINX/cert` - SSL keys obtained from CloudFlare Origin certificate service
+- `/mattermost/DIUN/data` - DIUN database tracking container image versions
 - `/backups/MMserver` - Mattermost file backups (mounted from Hetzner Storage Box)
 - `/backups/PgSQL` - PostgreSQL database backups (mounted from Hetzner Storage Box)
 
@@ -132,13 +147,14 @@ To change the security update schedule, modify the cron entry in `cloud-init.yam
 Email functionality is configured via Terraform variables. The same SMTP credentials are used for both:
 1. **Mattermost application emails** (password resets, notifications, etc.)
 2. **OS-level security update notifications** (failure alerts)
+3. **DIUN container update notifications** (new image version alerts)
 
 ### Required Variables
 
 Add these to your `terraform.auto.tfvars`:
 
 ```hcl
-# SMTP credentials (shared by Mattermost and OS notifications)
+# SMTP credentials (shared by Mattermost, OS notifications, and DIUN)
 smtp_username            = "your-email@gmail.com"
 smtp_password            = "your-app-password"
 smtp_server              = "smtp.gmail.com"
@@ -150,8 +166,8 @@ enable_smtp_auth         = true
 feedback_email   = "mattermost@your.domain"  # Sender for Mattermost emails
 reply_to_address = "noreply@your.domain"     # Reply-to for Mattermost
 
-# System administrator email for OS update notifications
-sysadmin_email = "admin@your.domain"  # Receives security update failure alerts
+# System administrator email for OS update notifications and DIUN alerts
+sysadmin_email = "admin@your.domain"  # Receives security update failures and container update notifications
 ```
 
 ### Email Notification Behavior
@@ -161,6 +177,11 @@ sysadmin_email = "admin@your.domain"  # Receives security update failure alerts
 - ❌ **Failed updates** - Email sent to `sysadmin_email` with error details
 - ❌ **Package conflicts** - Email sent with conflict information
 - ❌ **Download failures** - Email sent with failure reasons
+
+**Container Update Notifications** via DIUN:
+- 📧 **New image versions detected** - Email sent to `sysadmin_email` listing available updates
+- 🔍 **Checks run bi-monthly** (15th of every other month) and on container restart
+- 📊 **Reports all watched containers** - postgres, mattermost, nginx, portainer, diun itself
 
 This ensures you're only notified when something needs attention, not on every successful update.
 
@@ -185,10 +206,22 @@ echo "Test email from Mattermost server" | mail -s "Test Email" admin@your.domai
 sudo tail -f /var/log/mail.log
 ```
 
+### Testing DIUN Notifications
+
+To manually trigger a DIUN check:
+```bash
+# Restart DIUN to trigger runOnStartup check
+docker restart diun
+
+# Watch logs for notification activity
+docker logs -f diun
+```
+
 ## Security Features
 
 - **Automated security updates** - Only security patches, scheduled for predictable maintenance window
 - **Email alerts on failures** - Immediate notification if updates encounter errors
+- **Container update monitoring** - Bi-monthly email notifications when new Docker images are available
 - **Cloudflare Authenticated Origin Pulls** - Server only responds to Cloudflare requests
 - **Geographic restriction** - Optional country-based access control via Cloudflare
 - **Custom SSH port** - Reduces automated attack surface
@@ -234,6 +267,19 @@ sudo mailq
 
 # View Postfix logs
 sudo tail -f /var/log/mail.log
+```
+
+### Checking DIUN Status
+
+```bash
+# View DIUN logs
+docker logs diun
+
+# Check DIUN configuration
+cat /mattermost/DIUN/diun.yml
+
+# View DIUN database (tracked images)
+sudo ls -lh /mattermost/DIUN/data/
 ```
 
 ## License
