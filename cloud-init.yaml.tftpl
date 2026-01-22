@@ -34,6 +34,62 @@ write_files:
       apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
       systemctl enable --now docker
 
+  - path: /root/setup_volume.sh
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+      
+      VOLUME_DEVICE="${volume_device}"
+      MOUNT_POINT="/DockerVolumeMounts"
+      
+      echo "Setting up volume at $VOLUME_DEVICE"
+      
+      # Wait for volume device to be available
+      timeout=60
+      while [ ! -e "$VOLUME_DEVICE" ] && [ $timeout -gt 0 ]; do
+        echo "Waiting for volume device to appear..."
+        sleep 2
+        timeout=$((timeout - 2))
+      done
+      
+      if [ ! -e "$VOLUME_DEVICE" ]; then
+        echo "ERROR: Volume device $VOLUME_DEVICE not found after waiting!"
+        exit 1
+      fi
+      
+      # Check if volume is already formatted
+      if ! blkid "$VOLUME_DEVICE" | grep -q "ext4"; then
+        echo "Volume is not formatted. Formatting with ext4..."
+        mkfs.ext4 -F "$VOLUME_DEVICE"
+        echo "Volume formatted successfully."
+      else
+        echo "Volume is already formatted with ext4. Skipping format."
+      fi
+      
+      # Create mount point if it doesn't exist
+      mkdir -p "$MOUNT_POINT"
+      
+      # Mount the volume
+      if ! mountpoint -q "$MOUNT_POINT"; then
+        echo "Mounting volume to $MOUNT_POINT"
+        mount "$VOLUME_DEVICE" "$MOUNT_POINT"
+        echo "Volume mounted successfully."
+      else
+        echo "Volume already mounted at $MOUNT_POINT"
+      fi
+      
+      # Add to fstab for persistent mounting (only if not already present)
+      VOLUME_UUID=$(blkid -s UUID -o value "$VOLUME_DEVICE")
+      if ! grep -q "$VOLUME_UUID" /etc/fstab; then
+        echo "UUID=$VOLUME_UUID $MOUNT_POINT ext4 defaults,nofail 0 2" >> /etc/fstab
+        echo "Added volume to /etc/fstab"
+      else
+        echo "Volume already in /etc/fstab"
+      fi
+      
+      echo "Volume setup complete!"
+
   - path: /etc/postfix/main.cf
     permissions: '0644'
     content: |
@@ -128,7 +184,7 @@ write_files:
       # Disable the default systemd timer and use cron for precise scheduling
       0 4 * * 2 root /usr/bin/unattended-upgrade -v
 
-  - path: /mattermost/NGINX/nginx.conf
+  - path: /DockerConfig/NGINX/nginx.conf
     permissions: '0644'
     content: |
       upstream mattermost {
@@ -178,14 +234,14 @@ write_files:
         }
       }
 
-  - path: /mattermost/.env
+  - path: /DockerConfig/.env
     permissions: '0600'
     content: |
       DB_USER=${db_user}
       DB_PASSWORD=${db_password}
       DB_NAME=${db_name}
 
-  - path: /mattermost/DIUN/diun.yml
+  - path: /DockerConfig/DIUN/diun.yml
     permissions: '0600'
     content: |
       db:
@@ -221,17 +277,17 @@ write_files:
           watchByDefault: true
           watchStopped: false
 
-  - path: /mattermost/NGINX/cert/origin.crt
+  - path: /DockerConfig/NGINX/cert/origin.crt
     permissions: '0644'
     content: |
       ${origin_cert}
 
-  - path: /mattermost/NGINX/cert/origin.key
+  - path: /DockerConfig/NGINX/cert/origin.key
     permissions: '0600'
     content: |
       ${origin_key}
 
-  - path: /mattermost/docker-compose.yml
+  - path: /DockerConfig/docker-compose.yml
     permissions: '0644'
     content: |
       version: "3.8"
@@ -259,12 +315,12 @@ write_files:
             - MM_EMAILSETTINGS_FEEDBACKEMAIL=${feedback_email}
             - MM_EMAILSETTINGS_REPLYTOADDRESS=${reply_to_address}
           volumes:
-            - /mattermost/MMserver/config:/mattermost/config:rw
-            - /mattermost/MMserver/data:/mattermost/data:rw
-            - /mattermost/MMserver/logs:/mattermost/logs:rw
-            - /mattermost/MMserver/plugins:/mattermost/plugins:rw
-            - /mattermost/MMserver/client_plugins:/mattermost/client/plugins:rw
-            - /mattermost/MMserver/bleve-indexes:/mattermost/bleve-indexes:rw
+            - /DockerVolumeMounts/MMserver/config:/mattermost/config:rw
+            - /DockerVolumeMounts/MMserver/data:/mattermost/data:rw
+            - /DockerVolumeMounts/MMserver/logs:/mattermost/logs:rw
+            - /DockerVolumeMounts/MMserver/plugins:/mattermost/plugins:rw
+            - /DockerVolumeMounts/MMserver/client_plugins:/mattermost/client/plugins:rw
+            - /DockerVolumeMounts/MMserver/bleve-indexes:/mattermost/bleve-indexes:rw
             - /backups/${storage_box_backup_dir}/MMserver:/mattermost/backup:rw
 
         db:
@@ -282,7 +338,7 @@ write_files:
             - POSTGRES_DB=${db_name}
             - TZ=Europe/Podgorica
           volumes:
-            - /mattermost/PgSQL/data:/var/lib/postgresql/data:rw
+            - /DockerVolumeMounts/PgSQL/data:/var/lib/postgresql/data:rw
             - /backups/${storage_box_backup_dir}/PgSQL:/backups:rw
 
         web:
@@ -294,8 +350,8 @@ write_files:
             - "80:80"
             - "443:443"
           volumes:
-            - /mattermost/NGINX/nginx.conf:/etc/nginx/conf.d/mattermost.conf:ro
-            - /mattermost/NGINX/cert:/etc/nginx/certs:ro
+            - /DockerConfig/NGINX/nginx.conf:/etc/nginx/conf.d/mattermost.conf:ro
+            - /DockerConfig/NGINX/cert:/etc/nginx/certs:ro
 
         portainer:
           image: portainer/portainer-ce:latest
@@ -305,7 +361,7 @@ write_files:
             - no-new-privileges:true
           volumes:
             - /var/run/docker.sock:/var/run/docker.sock
-            - /mattermost/Portainer/data:/data
+            - /DockerVolumeMounts/Portainer/data:/data
           ports:
             - "127.0.0.1:9000:9000"
             - "127.0.0.1:9443:9443"
@@ -319,8 +375,8 @@ write_files:
             - TZ=Europe/Podgorica
             - LOG_LEVEL=info
           volumes:
-            - /mattermost/DIUN/data:/data
-            - /mattermost/DIUN/diun.yml:/etc/diun/diun.yml:ro
+            - /DockerVolumeMounts/DIUN/data:/data
+            - /DockerConfig/DIUN/diun.yml:/etc/diun/diun.yml:ro
             - /var/run/docker.sock:/var/run/docker.sock
 
   - path: /etc/cron.d/mattermost-backups
@@ -330,36 +386,60 @@ write_files:
       30 2 * * * root docker exec -t mattermost-db pg_dump -U ${db_user} ${db_name} | gzip > /backups/${storage_box_backup_dir}/PgSQL/mattermost-$(date +\%F).sql.gz
       # Prune PG dumps older than 65 days
       15 3 * * * root find /backups/${storage_box_backup_dir}/PgSQL -type f -name 'mattermost-*.sql.gz' -mtime +65 -delete
-      # Bi-weekly (every 14 days) tar of /mattermost/MMserver at 03:10
-      10 3 */14 * * root tar czf /backups/${storage_box_backup_dir}/MMserver/mm-files-$(date +\%F).tar.gz -C /mattermost/MMserver .
+      # Bi-weekly (every 14 days) tar of /DockerVolumeMounts/MMserver at 03:10
+      10 3 */14 * * root tar czf /backups/${storage_box_backup_dir}/MMserver/mm-files-$(date +\%F).tar.gz -C /DockerVolumeMounts/MMserver .
       # Prune MM tars older than 30 days
       20 3 * * * root find /backups/${storage_box_backup_dir}/MMserver -type f -name 'mm-files-*.tar.gz' -mtime +30 -delete
 
 
 runcmd:
-  - mkdir -p /mattermost/MMserver/{config,data,logs,plugins,client_plugins,bleve-indexes}
-  - mkdir -p /mattermost/PgSQL/data
-  - mkdir -p /mattermost/NGINX/cert
-  - mkdir -p /mattermost/Portainer/data
-  - mkdir -p /mattermost/DIUN/data
-  - chown -R 2000:2000 /mattermost/MMserver || true
-  - chown -R 999:999 /mattermost/PgSQL || true
-  - [ bash, -c, "mkdir -p /mattermost/MMserver/{config,data,logs,plugins,client_plugins,bleve-indexes}" ]
+  # Install Docker first
   - [ bash, -c, "/root/install_docker.sh" ]
+  
+  # Setup and mount the block storage volume
+  - [ bash, -c, "/root/setup_volume.sh" ]
+  
+  # Create directory structure on the mounted volume for persistent data
+  - [ bash, -c, "mkdir -p /DockerVolumeMounts/MMserver/{config,data,logs,plugins,client_plugins,bleve-indexes}" ]
+  - [ bash, -c, "mkdir -p /DockerVolumeMounts/PgSQL/data" ]
+  - [ bash, -c, "mkdir -p /DockerVolumeMounts/Portainer/data" ]
+  - [ bash, -c, "mkdir -p /DockerVolumeMounts/DIUN/data" ]
+  
+  # Set proper ownership
+  - [ bash, -c, "chown -R 2000:2000 /DockerVolumeMounts/MMserver || true" ]
+  - [ bash, -c, "chown -R 999:999 /DockerVolumeMounts/PgSQL || true" ]
+  
+  # Setup backup storage box mount
   - [ bash, -c, "mkdir -p /backups" ]
   - [ bash, -c, "apt-get install -y cifs-utils" ]
   - [ bash, -c, "echo '//${storage_box_host}/backup /backups cifs username=${storage_box_user},password=${storage_box_password},vers=3.0,_netdev,x-systemd.automount 0 0' >> /etc/fstab" ]
   - [ bash, -c, "mount -a || true" ]
   - [ bash, -c, "mkdir -p /backups/${storage_box_backup_dir}/MMserver" ]
   - [ bash, -c, "mkdir -p /backups/${storage_box_backup_dir}/PgSQL" ]
-  - [ bash, -c, "curl -fsSL https://developers.cloudflare.com/ssl/static/authenticated_origin_pull_ca.pem -o /mattermost/NGINX/cert/cloudflare-origin-pull-ca.pem" ]
+  
+  # Download Cloudflare origin pull certificate
+  - [ bash, -c, "curl -fsSL https://developers.cloudflare.com/ssl/static/authenticated_origin_pull_ca.pem -o /DockerConfig/NGINX/cert/cloudflare-origin-pull-ca.pem" ]
+  
+  # Setup Postfix for email notifications
   - [ bash, -c, "postmap /etc/postfix/sasl_passwd" ]
   - [ bash, -c, "systemctl restart postfix" ]
-  - [ bash, -c, "cd /mattermost && docker compose up -d" ]
+  
+  # Start Docker containers
+  - [ bash, -c, "cd /DockerConfig && docker compose up -d" ]
+  
+  # Enable fail2ban
   - [ bash, -c, "systemctl enable --now fail2ban" ]
-  - [ bash, -c, "chown -R 2000:2000 /mattermost/MMserver" ]
+  
+  # Fix permissions
+  - [ bash, -c, "chown -R 2000:2000 /DockerVolumeMounts/MMserver" ]
+  - [ bash, -c, "chmod -R 755 /DockerVolumeMounts" ]
+  
+  # Disable default unattended-upgrades timers (using cron instead)
   - [ bash, -c, "systemctl disable apt-daily.timer apt-daily-upgrade.timer" ]
   - [ bash, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer" ]
+  
+  # Restart SSH with custom port
   - [ bash, -c, "systemctl restart sshd" ]
-  - [ bash, -c, "chmod -R 755 /mattermost" ]
+  
+  # Schedule reboot to finalize setup
   - [ bash, -c, "nohup bash -c 'sleep 30 && reboot' &" ]
