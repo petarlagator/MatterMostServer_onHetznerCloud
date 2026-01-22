@@ -34,6 +34,62 @@ write_files:
       apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
       systemctl enable --now docker
 
+  - path: /root/setup_volume.sh
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+      
+      VOLUME_DEVICE="${volume_device}"
+      MOUNT_POINT="/mattermost"
+      
+      echo "Setting up volume at $VOLUME_DEVICE"
+      
+      # Wait for volume device to be available
+      timeout=60
+      while [ ! -e "$VOLUME_DEVICE" ] && [ $timeout -gt 0 ]; do
+        echo "Waiting for volume device to appear..."
+        sleep 2
+        timeout=$((timeout - 2))
+      done
+      
+      if [ ! -e "$VOLUME_DEVICE" ]; then
+        echo "ERROR: Volume device $VOLUME_DEVICE not found after waiting!"
+        exit 1
+      fi
+      
+      # Check if volume is already formatted
+      if ! blkid "$VOLUME_DEVICE" | grep -q "ext4"; then
+        echo "Volume is not formatted. Formatting with ext4..."
+        mkfs.ext4 -F "$VOLUME_DEVICE"
+        echo "Volume formatted successfully."
+      else
+        echo "Volume is already formatted with ext4. Skipping format."
+      fi
+      
+      # Create mount point if it doesn't exist
+      mkdir -p "$MOUNT_POINT"
+      
+      # Mount the volume
+      if ! mountpoint -q "$MOUNT_POINT"; then
+        echo "Mounting volume to $MOUNT_POINT"
+        mount "$VOLUME_DEVICE" "$MOUNT_POINT"
+        echo "Volume mounted successfully."
+      else
+        echo "Volume already mounted at $MOUNT_POINT"
+      fi
+      
+      # Add to fstab for persistent mounting (only if not already present)
+      VOLUME_UUID=$(blkid -s UUID -o value "$VOLUME_DEVICE")
+      if ! grep -q "$VOLUME_UUID" /etc/fstab; then
+        echo "UUID=$VOLUME_UUID $MOUNT_POINT ext4 defaults,nofail 0 2" >> /etc/fstab
+        echo "Added volume to /etc/fstab"
+      else
+        echo "Volume already in /etc/fstab"
+      fi
+      
+      echo "Volume setup complete!"
+
   - path: /etc/postfix/main.cf
     permissions: '0644'
     content: |
@@ -337,29 +393,54 @@ write_files:
 
 
 runcmd:
-  - mkdir -p /mattermost/MMserver/{config,data,logs,plugins,client_plugins,bleve-indexes}
-  - mkdir -p /mattermost/PgSQL/data
-  - mkdir -p /mattermost/NGINX/cert
-  - mkdir -p /mattermost/Portainer/data
-  - mkdir -p /mattermost/DIUN/data
-  - chown -R 2000:2000 /mattermost/MMserver || true
-  - chown -R 999:999 /mattermost/PgSQL || true
-  - [ bash, -c, "mkdir -p /mattermost/MMserver/{config,data,logs,plugins,client_plugins,bleve-indexes}" ]
+  # Install Docker first
   - [ bash, -c, "/root/install_docker.sh" ]
+  
+  # Setup and mount the block storage volume
+  - [ bash, -c, "/root/setup_volume.sh" ]
+  
+  # Create Mattermost directory structure on the mounted volume
+  - [ bash, -c, "mkdir -p /mattermost/MMserver/{config,data,logs,plugins,client_plugins,bleve-indexes}" ]
+  - [ bash, -c, "mkdir -p /mattermost/PgSQL/data" ]
+  - [ bash, -c, "mkdir -p /mattermost/NGINX/cert" ]
+  - [ bash, -c, "mkdir -p /mattermost/Portainer/data" ]
+  - [ bash, -c, "mkdir -p /mattermost/DIUN/data" ]
+  
+  # Set proper ownership
+  - [ bash, -c, "chown -R 2000:2000 /mattermost/MMserver || true" ]
+  - [ bash, -c, "chown -R 999:999 /mattermost/PgSQL || true" ]
+  
+  # Setup backup storage box mount
   - [ bash, -c, "mkdir -p /backups" ]
   - [ bash, -c, "apt-get install -y cifs-utils" ]
   - [ bash, -c, "echo '//${storage_box_host}/backup /backups cifs username=${storage_box_user},password=${storage_box_password},vers=3.0,_netdev,x-systemd.automount 0 0' >> /etc/fstab" ]
   - [ bash, -c, "mount -a || true" ]
   - [ bash, -c, "mkdir -p /backups/${storage_box_backup_dir}/MMserver" ]
   - [ bash, -c, "mkdir -p /backups/${storage_box_backup_dir}/PgSQL" ]
+  
+  # Download Cloudflare origin pull certificate
   - [ bash, -c, "curl -fsSL https://developers.cloudflare.com/ssl/static/authenticated_origin_pull_ca.pem -o /mattermost/NGINX/cert/cloudflare-origin-pull-ca.pem" ]
+  
+  # Setup Postfix for email notifications
   - [ bash, -c, "postmap /etc/postfix/sasl_passwd" ]
   - [ bash, -c, "systemctl restart postfix" ]
+  
+  # Start Docker containers
   - [ bash, -c, "cd /mattermost && docker compose up -d" ]
+  
+  # Enable fail2ban
   - [ bash, -c, "systemctl enable --now fail2ban" ]
+  
+  # Fix permissions
   - [ bash, -c, "chown -R 2000:2000 /mattermost/MMserver" ]
+  - [ bash, -c, "chmod -R 755 /mattermost" ]
+  
+  # Disable default unattended-upgrades timers (using cron instead)
   - [ bash, -c, "systemctl disable apt-daily.timer apt-daily-upgrade.timer" ]
   - [ bash, -c, "systemctl stop apt-daily.timer apt-daily-upgrade.timer" ]
+  
+  # Restart SSH with custom port
   - [ bash, -c, "systemctl restart sshd" ]
-  - [ bash, -c, "chmod -R 755 /mattermost" ]
+  
+  # Schedule reboot to finalize setup
   - [ bash, -c, "nohup bash -c 'sleep 30 && reboot' &" ]
