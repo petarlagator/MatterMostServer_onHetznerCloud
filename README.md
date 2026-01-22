@@ -7,6 +7,7 @@ This project provisions a Hetzner VM, installs Docker, and starts Mattermost + P
 ## What this deploys
 
 - **Hetzner Cloud VM** (default: CPX22) in **NBG1** (Nuremberg), with optional Hetzner automatic backups enabled.
+- **Hetzner Block Storage Volume** for persistent data storage with deletion protection.
 - **Dockerized services**:
   - Mattermost
   - PostgreSQL
@@ -33,6 +34,8 @@ Traffic flow is: **Internet → Cloudflare → NGINX (443) → Mattermost contai
 
 PostgreSQL is not exposed publicly; it is only reachable from the internal Docker network on the VM.
 
+**Storage Architecture**: All Docker persistent data (database, Mattermost files, configs, logs) is stored on a **Hetzner Block Storage Volume** mounted at `/mattermost`. This volume is separate from the VM's root disk and has **deletion protection enabled**, ensuring your data persists even if you destroy and recreate the server.
+
 ## Prerequisites
 
 Accounts / services:
@@ -51,6 +54,7 @@ Local tools:
 2) Create your variables file:
 - Copy `example.tfvars` → `terraform.auto.tfvars`
 - Fill in the values (tokens, domain/zone details, SSH key settings, SMTP configuration, etc.).
+- **Set the volume size** using the `volume_size` variable (default: 30GB).
 
 3) Initialize and deploy:
 ```bash
@@ -62,6 +66,63 @@ terraform apply
 4) Wait for the VM to come up, install Docker, and start all containers. First boot takes a few minutes.
 
 5) Access your Mattermost instance at `https://your.domain` and complete the initial setup.
+
+## Block Storage Volume Configuration
+
+All persistent data is stored on a Hetzner Block Storage Volume, not on the VM's root disk. This provides several advantages:
+
+### Benefits
+- **Data persistence** - Your data survives VM destruction and recreation
+- **Deletion protection** - Volume cannot be accidentally deleted
+- **Easy scaling** - Expand volume size without recreating the VM
+- **Performance** - Dedicated storage optimized for persistent data
+- **Backup flexibility** - Volume can be snapshotted independently
+
+### Configuration Variables
+
+Add these to your `terraform.auto.tfvars`:
+
+```hcl
+# Block Storage Volume Configuration
+volume_name = "mattermost-data-volume"  # Name of the volume (default)
+volume_size = 30                         # Size in GB (default: 30GB)
+```
+
+### Expanding the Volume
+
+If you need more space later, you can expand the volume without downtime:
+
+**1. Update Terraform configuration:**
+```hcl
+# In terraform.auto.tfvars, increase the size
+volume_size = 50  # Expand from 30GB to 50GB
+```
+
+**2. Apply the change:**
+```bash
+terraform apply
+```
+
+**3. SSH into the server and resize the filesystem:**
+```bash
+ssh -p 46892 root@your-server-ip
+
+# Resize the ext4 filesystem to use the new space
+sudo resize2fs /dev/disk/by-id/scsi-0HC_Volume_<volume_id>
+
+# Verify the new size
+df -h /mattermost
+```
+
+**Note**: You can only **increase** volume size, not decrease it. Hetzner charges ~€0.05/GB/month for block storage.
+
+### Volume Specifications
+- **Filesystem**: ext4
+- **Mount point**: `/mattermost`
+- **Default size**: 30GB
+- **Deletion protection**: Enabled by default
+- **Format behavior**: Automatically formatted on first boot only
+- **Data persistence**: Existing data is preserved when reattaching
 
 ## Performance
 
@@ -78,6 +139,8 @@ Comprehensive load tests reveal **CPX32 (4 AMD EPYC cores) is the ULTIMATE WINNE
 | **CPX32** | **1500+** | **€10.50** | **€0.70** | ⭐⭐⭐⭐⭐ **Best Performance** |
 
 **Key Finding**: 4 AMD EPYC cores (CPX32) = best of both worlds. Fast single-thread performance + excellent parallelization. Worth every cent for 1000+ users!
+
+**Storage Costs**: Add ~€1.50/month for a 30GB block storage volume (€0.05/GB/month).
 
 ## Maintenance Timeline Schedule
 
@@ -131,6 +194,8 @@ watch:
 
 ## Docker Server Directory Mappings
 
+All directories below are stored on the Hetzner Block Storage Volume mounted at `/mattermost`:
+
 - `/mattermost/MMserver/config` – Mattermost config file (config.json) will be stored here
 - `/mattermost/MMserver/data` – All user-uploaded files (images, attachments) will persist here
 - `/mattermost/MMserver/logs` – Log files
@@ -141,6 +206,8 @@ watch:
 - `/mattermost/DIUN/data` - DIUN database tracking container image versions
 - `/backups/MMserver` - Mattermost file backups (mounted from Hetzner Storage Box)
 - `/backups/PgSQL` - PostgreSQL database backups (mounted from Hetzner Storage Box)
+
+**Note**: The `/backups` directory is a separate CIFS mount to your Hetzner Storage Box for off-site backups.
 
 ## SMTP Email Configuration
 
@@ -227,8 +294,23 @@ docker logs -f diun
 - **Custom SSH port** - Reduces automated attack surface
 - **Fail2ban** - Protection against brute force attacks
 - **Automatic backups** - Both Hetzner VM snapshots and application-level backups
+- **Volume deletion protection** - Block storage volume cannot be accidentally deleted
 
 ## Troubleshooting
+
+### Checking Volume Status
+
+To verify the block storage volume is properly mounted:
+```bash
+# Check mount point
+df -h /mattermost
+
+# Verify volume is in fstab
+cat /etc/fstab | grep mattermost
+
+# Check block device
+lsblk
+```
 
 ### Checking Update Logs
 
