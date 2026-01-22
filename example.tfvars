@@ -58,3 +58,9 @@ reply_to_address         = "noreply@your.domain"     # Reply-to address for Matt
 # System administrator email for OS security update failure notifications
 # This email will receive alerts if automatic security updates encounter errors
 sysadmin_email = "admin@your.domain"
+
+# Block Storage Volume Configuration
+# Name of the Hetzner block storage volume that will hold all persistent Mattermost data
+volume_name = "mattermost-data-volume"
+# Size of the block storage volume in GB (default: 30GB)
+volume_size = 30
