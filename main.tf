@@ -7,6 +7,21 @@ resource "hcloud_ssh_key" "me" {
 }
 
 # -----------------------------------------------------
+# Hetzner Block Storage Volume
+# -----------------------------------------------------
+resource "hcloud_volume" "mattermost_data" {
+  name              = var.volume_name
+  size              = var.volume_size
+  location          = var.location
+  format            = "ext4"
+  delete_protection = true
+
+  labels = {
+    purpose = "mattermost-persistent-data"
+  }
+}
+
+# -----------------------------------------------------
 # Hetzner Firewall
 # -----------------------------------------------------
 resource "hcloud_firewall" "mm" {
@@ -106,6 +121,7 @@ data "template_file" "cloud_init" {
     storage_box_backup_dir = var.storage_box_backup_dir
     watchtower_api_token   = var.watchtower_api_token
     ssh_port               = var.ssh_port
+    volume_device          = "/dev/disk/by-id/scsi-0HC_Volume_${hcloud_volume.mattermost_data.id}"
 
     # SMTP Configuration (for both Mattermost and OS notifications)
     smtp_username            = var.smtp_username
@@ -142,6 +158,13 @@ resource "hcloud_server" "mm" {
 resource "hcloud_firewall_attachment" "mm_attach" {
   firewall_id = hcloud_firewall.mm.id
   server_ids  = [hcloud_server.mm.id]
+}
+
+# Attach the volume to the server
+resource "hcloud_volume_attachment" "mattermost_data_attachment" {
+  volume_id = hcloud_volume.mattermost_data.id
+  server_id = hcloud_server.mm.id
+  automount = false # We handle mounting in cloud-init for proper initialization
 }
 
 # -----------------------------------------------------
