@@ -192,11 +192,10 @@ write_files:
         path: /data/diun.db
 
       watch:
-        # For initial testing: run a check on container start.
-        # Once confirmed, we will change schedule to quarterly.
+        # Run a check on container start
         runOnStartup: true
-        # "Never" schedule (yearly) to avoid periodic checks for now.
-        schedule: "0 0 1 1 *"
+        # Check every 2 months on the 15th at midnight
+        schedule: "0 0 15 */2 *"
 
       defaults:
         # Notify only when a new tag/digest is detected.
