@@ -151,7 +151,7 @@ resource "hcloud_server" "mm" {
   location    = var.location
   ssh_keys    = [hcloud_ssh_key.me.id]
   user_data   = data.template_file.cloud_init.rendered
-  backups     = true # Enable automatic snapshots/backups
+  backups     = false # Disable automatic snapshots/backups
 }
 
 # Attach the firewall to the server
