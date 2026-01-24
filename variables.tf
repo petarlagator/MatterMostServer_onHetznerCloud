@@ -203,3 +203,10 @@ variable "volume_size" {
   description = "Size of the block storage volume in GB"
   default     = 30
 }
+
+# Hetzner VM Backup Configuration
+variable "enable_hetzner_backups" {
+  type        = bool
+  description = "Enable Hetzner automatic VM snapshots/backups (costs extra)"
+  default     = false
+}
