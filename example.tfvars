@@ -64,3 +64,12 @@ sysadmin_email = "admin@your.domain"
 volume_name = "mattermost-data-volume"
 # Size of the block storage volume in GB (default: 30GB)
 volume_size = 30
+
+# Hetzner VM Backups
+# Enable Hetzner's automatic VM snapshots/backups (costs extra per month)
+# This is not really needed since all Docker data is stored on the block storage volume
+# (which has deletion protection enabled) and regular backups are already being made
+# to the Hetzner Storage Box. However, VM backups can provide an additional layer of
+# protection if you want to quickly restore the entire server state. The option is here
+# if you want it.
+enable_hetzner_backups = false
